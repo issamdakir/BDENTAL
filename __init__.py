@@ -37,7 +37,8 @@ bl_info = {
 # IMPORTS :
 #############################################################################################
 # Python imports :
-import sys, os, bpy, subprocess, socket, time
+import sys, os, bpy, subprocess, socket, time, addon_utils
+
 
 #############################################################
 # Add sys Paths : Addon directory and requirements directory
@@ -89,6 +90,14 @@ if "cv2" in os.listdir(requirements_path) and "SimpleITK" in os.listdir(
     init_classes = []
 
     def register():
+        # activate io_import_images_as_planes built_in addon :
+        addon_utils.enable(
+            "io_import_images_as_planes",
+            default_set=True,
+            persistent=True,
+            handle_error=None,
+        )
+
         for module in addon_modules:
             module.register()
         for cl in init_classes:
@@ -143,10 +152,21 @@ else:
         init_classes = []
 
         def register():
+            # activate io_import_images_as_planes built_in addon :
+            addon_utils.enable(
+                "io_import_images_as_planes",
+                default_set=True,
+                persistent=True,
+                handle_error=None,
+            )
+
             for module in addon_modules:
                 module.register()
             for cl in init_classes:
                 bpy.utils.register_class(cl)
+
+            message = "BDENTAL SCAN VIEWER enabled successfully ) "
+            ShowMessageBox(message=message, icon="COLORSET_03_VEC")
 
         def unregister():
             for cl in init_classes:

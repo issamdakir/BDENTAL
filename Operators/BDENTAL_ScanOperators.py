@@ -480,6 +480,8 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     #################################################################################
     Start = time.perf_counter()
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+    # acctivate io_import_images_as_planes :
+    bpy.ops.preferences.addon_enable(module="io_import_images_as_planes")
     # Set Render settings :
     Scene_Settings()
 
