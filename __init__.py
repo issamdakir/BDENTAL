@@ -71,43 +71,9 @@ def isConnected():
         return False
 
 
-######################################################################################
-if isConnected():
-    try:
-        import SimpleITK
-
-        print("Packed SimpleITK found...")
-
-        import cv2
-
-        print("Packed opencv found...")
-
-        print("requirements OK.")
-
-    except ModuleNotFoundError:
-
-        # Download and install requirement if not Addon Packed :
-        Blender_python_path = sys.base_exec_prefix
-        Requirements = ["SimpleITK", "opencv-python"]
-        site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
-        subprocess.call(
-            f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
-            shell=True,
-        )
-        print("pip upgraded")
-        subprocess.call(
-            f"cd {Blender_python_path} && bin\python -m pip install -U SimpleITK",
-            shell=True,
-        )
-        print("SimpleITK Downloaded installed")
-        subprocess.call(
-            f"cd {Blender_python_path} && bin\python -m pip install -U opencv-python",
-            shell=True,
-        )
-        print("opencv-python Downloaded installed")
-        ##########################
-        print("requirements OK.")
-
+if "cv2" in os.listdir(requirements_path) and "SimpleITK" in os.listdir(
+    requirements_path
+):
     # Addon modules imports :
     from . import BDENTAL_Props, BDENTAL_Panel
     from .Operators import BDENTAL_ScanOperators
@@ -121,9 +87,6 @@ if isConnected():
         BDENTAL_ScanOperators,
     ]
     init_classes = []
-
-    message = "BDENTAL SCAN VIEWER Add-on registred succeffuly. "
-    ShowMessageBox(message=message, icon="COLORSET_03_VEC")
 
     def register():
         for module in addon_modules:
@@ -140,19 +103,72 @@ if isConnected():
     if __name__ == "__main__":
         register()
 
-
 else:
 
-    def register():
+    ######################################################################################
+    if isConnected():
 
-        message = "Please Check Internet Connexion and restart Blender! "
-        ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+        # Download and install requirement if not Addon Packed :
+        Blender_python_path = sys.base_exec_prefix
+        Requirements = ["SimpleITK", "opencv-python"]
+        site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
+        subprocess.call(
+            f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
+            shell=True,
+        )
+        print("pip upgraded")
+        command_1 = f'cd "{Blender_python_path}" && bin\python -m pip install -U SimpleITK --target "{requirements_path}"'
+        subprocess.call(command_1, shell=True)
+        print("SimpleITK Downloaded installed")
 
-    def unregister():
-        pass
+        command_2 = f'cd "{Blender_python_path}" && bin\python -m pip install -U opencv-python --target "{requirements_path}"'
+        subprocess.call(command_2, shell=True)
+        print("opencv-python Downloaded installed")
 
-    if __name__ == "__main__":
-        register()
+        ##########################
+        print("requirements installed successfuly.")
+
+        ############################################################################################
+        # Registration :
+        ############################################################################################
+        # Addon modules imports :
+        from . import BDENTAL_Props, BDENTAL_Panel
+        from .Operators import BDENTAL_ScanOperators
+
+        addon_modules = [
+            BDENTAL_Props,
+            BDENTAL_Panel,
+            BDENTAL_ScanOperators,
+        ]
+        init_classes = []
+
+        def register():
+            for module in addon_modules:
+                module.register()
+            for cl in init_classes:
+                bpy.utils.register_class(cl)
+
+        def unregister():
+            for cl in init_classes:
+                bpy.utils.unregister_class(cl)
+            for module in reversed(addon_modules):
+                module.unregister()
+
+        if __name__ == "__main__":
+            register()
+
+    else:
+
+        def register():
+
+            message = "Please Check Internet Connexion and restart Blender! "
+            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+
+        def unregister():
+            pass
+
+        if __name__ == "__main__":
+            register()
 # #########################################################################################################
 # # Addon modules imports :
 # from . import BDENTAL_Props, BDENTAL_Panel
