@@ -25,7 +25,7 @@ bl_info = {
     "name": "BDENTAL SCAN VIEWER",  ###################Addon name
     "author": "Essaid Issam Dakir DMD",
     "version": (1, 0, 0),
-    "blender": (2, 90, 1),  ################# Blender working version
+    "blender": (2, 80, 0),  ################# Blender working version
     "location": "3D View -> UI SIDE PANEL ",
     "description": "3D Tools suite for Digital Dentistry",  ########### Addon description
     "warning": "",
@@ -37,7 +37,7 @@ bl_info = {
 # IMPORTS :
 #############################################################################################
 # Python imports :
-import sys, os, bpy
+import sys, os, bpy, subprocess, socket, time
 
 #############################################################
 # Add sys Paths : Addon directory and requirements directory
@@ -49,41 +49,144 @@ sysPaths = [addon_dir, requirements_path]
 for path in sysPaths:
     if not path in sys.path:
         sys.path.append(path)
-###############################################################
-# Addon modules imports :
-from . import BDENTAL_Props, BDENTAL_Panel
-from .Operators import BDENTAL_ScanOperators
-
-############################################################################################
-# Registration :
-############################################################################################
-
-addon_modules = [
-    BDENTAL_Props,
-    BDENTAL_Panel,
-    BDENTAL_ScanOperators,
-]
-
-init_classes = []
 
 
-# Registration :
-def register():
-    for module in addon_modules:
-        module.register()
+def ShowMessageBox(message="", title="INFO", icon="INFO"):
+    def draw(self, context):
+        self.layout.label(text=message)
 
-    for cl in init_classes:
-        bpy.utils.register_class(cl)
-
-
-def unregister():
-
-    for cl in init_classes:
-        bpy.utils.unregister_class(cl)
-
-    for module in reversed(addon_modules):
-        module.unregister()
+    bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
+    return
 
 
-if __name__ == "__main__":
-    register()
+def isConnected():
+    try:
+        sock = socket.create_connection(("www.google.com", 80))
+        if sock is not None:
+            print("Clossing socket")
+            sock.close
+        return True
+    except OSError:
+        pass
+        return False
+
+
+######################################################################################
+if isConnected():
+    try:
+        import SimpleITK
+
+        print("Packed SimpleITK found...")
+
+        import cv2
+
+        print("Packed opencv found...")
+
+        print("requirements OK.")
+
+    except ModuleNotFoundError:
+
+        # Download and install requirement if not Addon Packed :
+        Blender_python_path = sys.base_exec_prefix
+        Requirements = ["SimpleITK", "opencv-python"]
+        site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
+        subprocess.call(
+            f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
+            shell=True,
+        )
+        print("pip upgraded")
+        subprocess.call(
+            f"cd {Blender_python_path} && bin\python -m pip install -U SimpleITK",
+            shell=True,
+        )
+        print("SimpleITK Downloaded installed")
+        subprocess.call(
+            f"cd {Blender_python_path} && bin\python -m pip install -U opencv-python",
+            shell=True,
+        )
+        print("opencv-python Downloaded installed")
+        ##########################
+        print("requirements OK.")
+
+    # Addon modules imports :
+    from . import BDENTAL_Props, BDENTAL_Panel
+    from .Operators import BDENTAL_ScanOperators
+
+    ############################################################################################
+    # Registration :
+    ############################################################################################
+    addon_modules = [
+        BDENTAL_Props,
+        BDENTAL_Panel,
+        BDENTAL_ScanOperators,
+    ]
+    init_classes = []
+
+    message = "BDENTAL SCAN VIEWER Add-on registred succeffuly. "
+    ShowMessageBox(message=message, icon="COLORSET_03_VEC")
+
+    def register():
+        for module in addon_modules:
+            module.register()
+        for cl in init_classes:
+            bpy.utils.register_class(cl)
+
+    def unregister():
+        for cl in init_classes:
+            bpy.utils.unregister_class(cl)
+        for module in reversed(addon_modules):
+            module.unregister()
+
+    if __name__ == "__main__":
+        register()
+
+
+else:
+
+    def register():
+
+        message = "Please Check Internet Connexion and restart Blender! "
+        ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+
+    def unregister():
+        pass
+
+    if __name__ == "__main__":
+        register()
+# #########################################################################################################
+# # Addon modules imports :
+# from . import BDENTAL_Props, BDENTAL_Panel
+# from .Operators import BDENTAL_ScanOperators
+
+# ############################################################################################
+# # Registration :
+# ############################################################################################
+
+# addon_modules = [
+#     BDENTAL_Props,
+#     BDENTAL_Panel,
+#     BDENTAL_ScanOperators,
+# ]
+
+# init_classes = []
+
+# # Registration :
+# def register():
+#     for module in addon_modules:
+#         module.register()
+
+#     for cl in init_classes:
+#         bpy.utils.register_class(cl)
+
+
+# def unregister():
+
+#     for cl in init_classes:
+#         bpy.utils.unregister_class(cl)
+
+#     for module in reversed(addon_modules):
+#         module.unregister()
+
+
+# if __name__ == "__main__":
+#     register()
