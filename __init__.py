@@ -165,7 +165,7 @@ else:
             for cl in init_classes:
                 bpy.utils.register_class(cl)
 
-            message = "BDENTAL SCAN VIEWER enabled successfully ) "
+            message = "BDENTAL-SCAN-VIEWER enabled successfully :) "
             ShowMessageBox(message=message, icon="COLORSET_03_VEC")
 
         def unregister():
