@@ -134,23 +134,44 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
 
             Image3D = sitk.ReadImage(DcmSerie)
 
-            # Change Origine and direction:
+            # Get Dicom Info :
             Sp = Spacing = Image3D.GetSpacing()
             Sz = Size = Image3D.GetSize()
             Dims = Dimensions = Image3D.GetDimension()
+            Origin = Image3D.GetOrigin()
+            Direction = Image3D.GetDirection()
 
-            Ortho_Origine = -0.5 * (np.array(Sp) * np.array(Sz))
-            Identity = (1, 0, 0, 0, 1, 0, 0, 0, 1)
-            Image3D.SetOrigin(Ortho_Origine)
-            Image3D.SetDirection(Identity)
+            # # Change Origin and direction:
+            # Origin = Ortho_Origin = -0.5 * (np.array(Sp) * np.array(Sz))
+            # Direction =  Identity = (1, 0, 0, 0, 1, 0, 0, 0, 1)
+            # Image3D.SetOrigin(Origin)
+            # Image3D.SetDirection(Direction)
 
-            # Get DcmInfo :
+            # calculate the center of the volume :
+            P0 = Image3D.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
+            P_diagonal = Image3D.TransformContinuousIndexToPhysicalPoint(
+                (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
+            )
+            VCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
+
+            C = VCenter
+            D = Direction
+            TransformMatrix = Matrix(
+                (
+                    (D[0], D[1], D[2], C[0]),
+                    (D[3], D[4], D[5], C[1]),
+                    (D[6], D[7], D[8], C[2]),
+                    (0.0, 0.0, 0.0, 1),
+                )
+            )
+            DirectionMatrix = Matrix(
+                ((D[0], D[1], D[2]), (D[3], D[4], D[5]), (D[6], D[7], D[8]))
+            )
+
+            # Set DcmInfo :
 
             BDENTAL_Props.Wmin = Wmin
             BDENTAL_Props.Wmax = Wmax
-
-            Origine = Image3D.GetOrigin()
-            Direction = Image3D.GetDirection()
 
             DcmInfo = {
                 "PixelType": Image3D.GetPixelIDTypeAsString(),
@@ -159,8 +180,11 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
                 "size": Sz,
                 "dims": Dims,
                 "spacing": Sp,
-                "origine": Origine,
+                "Origin": Origin,
                 "direction": Direction,
+                "TransformMatrix": TransformMatrix,
+                "DirectionMatrix": DirectionMatrix,
+                "VolumeCenter": VCenter,
             }
 
             tags = {
@@ -321,24 +345,43 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             print("processing START...")
             start = time.perf_counter()
             ###################################################################################
-            # Change Origine and direction:
+            # Get Dicom Info :
             Sp = Spacing = Image3D.GetSpacing()
             Sz = Size = Image3D.GetSize()
             Dims = Dimensions = Image3D.GetDimension()
-
-            Ortho_Origine = -0.5 * (np.array(Sp) * np.array(Sz))
-            Identity = (1, 0, 0, 0, 1, 0, 0, 0, 1)
-            Image3D.SetOrigin(Ortho_Origine)
-            Image3D.SetDirection(Identity)
-
-            # Get DcmInfo :
-
-            BDENTAL_Props.Wmin = Wmin
-            BDENTAL_Props.Wmax = Wmax
-
-            Origine = Image3D.GetOrigin()
+            Origin = Image3D.GetOrigin()
             Direction = Image3D.GetDirection()
 
+            # # Change Origin and direction:
+            # Origin = Ortho_Origin = -0.5 * (np.array(Sp) * np.array(Sz))
+            # Direction =  Identity = (1, 0, 0, 0, 1, 0, 0, 0, 1)
+            # Image3D.SetOrigin(Origin)
+            # Image3D.SetDirection(Direction)
+
+            # calculate the center of the volume :
+            P0 = Image3D.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
+            P_diagonal = Image3D.TransformContinuousIndexToPhysicalPoint(
+                (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
+            )
+            VCenter = (P0 + P_diagonal) * 0.5
+
+            C = VCenter
+            D = Direction
+            TransformMatrix = Matrix(
+                (
+                    (D[0], D[3], D[6], C[0]),
+                    (D[1], D[4], D[7], C[1]),
+                    (D[2], D[5], D[8], C[2]),
+                    (0.0, 0.0, 0.0, 1),
+                )
+            )
+            DirectionMatrix = Matrix(
+                ((D[0], D[3], D[6]), (D[1], D[4], D[7]), (D[2], D[5], D[8]))
+            )
+
+            # Set DcmInfo :
+            BDENTAL_Props.Wmin = Wmin
+            BDENTAL_Props.Wmax = Wmax
             DcmInfo = {
                 "PixelType": Image3D.GetPixelIDTypeAsString(),
                 "wmin": Wmin,
@@ -346,8 +389,11 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
                 "size": Sz,
                 "dims": Dims,
                 "spacing": Sp,
-                "origine": Origine,
+                "Origin": Origin,
                 "direction": Direction,
+                "TransformMatrix": TransformMatrix,
+                "DirectionMatrix": DirectionMatrix,
+                "VolumeCenter": VCenter,
             }
 
             tags = {
@@ -490,9 +536,13 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
 
     Sp = Spacing = DcmInfo["spacing"]
     Sz = Size = DcmInfo["size"]
+    Origin = DcmInfo["Origin"]
+    Direction = DcmInfo["direction"]
+    TransformMatrix = DcmInfo["TransformMatrix"]
     DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
     Offset = Sp[2]
 
+    ###############################################################################################
     # Add Planes with textured material :
     PlansList = []
 
@@ -580,13 +630,11 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         Voxel.name = f"{Preffix}_CTVolume"
     else:
         Voxel.name = "CTVolume"
-    for i in range(3):
-        Voxel.lock_location[i] = True
-        Voxel.lock_rotation[i] = True
 
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
-    Voxel.matrix_world.translation = (0, 0, -Sp[2] * 0.5)
+
+    Voxel.matrix_world = DcmInfo["TransformMatrix"]
 
     # Change to ORTHO persp with nice view angle :
     ViewMatrix = Matrix(
@@ -600,8 +648,6 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
 
     bpy.ops.file.pack_all()
     bpy.ops.object.select_all(action="DESELECT")
-    Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, "VoxelRender.blend")
-    bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
 
     for scr in bpy.data.screens:
         # if scr.name in ["Layout", "Scripting", "Shading"]:
@@ -614,6 +660,11 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
                 r3d.update()
                 # space.show_region_ui = False
                 space.shading.type = "MATERIAL"
+
+    for i in range(3):
+        Voxel.lock_location[i] = True
+        Voxel.lock_rotation[i] = True
+        Voxel.lock_scale[i] = True
 
     Finish = time.perf_counter()
     print(f"CT-Scan loaded in {Finish-Start} secondes")
@@ -660,6 +711,7 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
             Wmax = BDENTAL_Props.Wmax
 
             newdriver.driver.expression = f"(Treshold-{Wmin})/{Wmax-Wmin}"
+            BDENTAL_Props.CT_Rendered = True
             PatientName = DcmInfo["PatientName"]
             PatientID = DcmInfo["PatientID"]
             Preffix = PatientName or PatientID
@@ -669,7 +721,6 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
                 BlendFile = "SCAN.blend"
             Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, BlendFile)
             bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-            BDENTAL_Props.CT_Rendered = True
 
             return {"FINISHED"}
 
@@ -686,8 +737,12 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
 
 def AxialSliceUpdate(scene):
 
-    ImageData = bpy.context.scene.BDENTAL_Props.NrrdImagePath
-    SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
+    BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+    ImageData = BDENTAL_Props.NrrdImagePath
+    SlicesDir = BDENTAL_Props.SlicesDir
+    DcmInfo = eval(BDENTAL_Props.DcmInfo)
+    TransformMatrix = DcmInfo["TransformMatrix"]
+    DirectionMatrix = DcmInfo["DirectionMatrix"]
 
     ImagePath = os.path.join(SlicesDir, "AXIAL.png")
     Plane = bpy.context.scene.objects["AXIAL"]
@@ -695,39 +750,55 @@ def AxialSliceUpdate(scene):
     if Plane and os.path.exists(ImageData):
 
         #########################################
+        #########################################
         # Get ImageData Infos :
         Image3D = sitk.ReadImage(ImageData)
-        Sp = Image3D.GetSpacing()
-        Size = Image3D.GetSize()
-        Sz = (Size[0], Size[1], 1)
-        Org = Image3D.GetOrigin()
-        # Origin = (Org[0], Org[1], Org[2])
-        Origin = (Org[0], Org[1], 0)
+        Sp = Spacing = Image3D.GetSpacing()
+        Sz = Size = Image3D.GetSize()
+        DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
+        Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
+        Image3D.SetOrigin(Ortho_Origin)
+        Image3D.SetDirection(np.identity(3).flatten())
+        Origin = Image3D.GetOrigin()
         Direction = Image3D.GetDirection()
+        P0 = Image3D.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
+        P_diagonal = Image3D.TransformContinuousIndexToPhysicalPoint(
+            (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
+        )
+        NewVCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
+        VC = VolumeCenter = DcmInfo["VolumeCenter"]
+
+        # Output Parameters :
+        Out_Origin = Vector([Origin[0], Origin[1], 0])
+        Out_Direction = Vector(Direction)
+        Out_Size = (Sz[0], Sz[1], 1)
+        Out_Spacing = Sp
 
         ######################################
         # Get Plane Orientation and location :
-        Rot = Plane.matrix_world.to_euler()
-        Loc = Plane.location
+        PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
+        Rot = PlanMatrix.to_euler()
+        Trans = PlanMatrix.translation
         Rvec = (Rot.x, Rot.y, Rot.z)
-        Tvec = (Loc[0], Loc[1], Loc[2])
+        Tvec = Trans
+
         ##########################################
         # Euler3DTransform :
         Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter((0.0, 0.0, 0.0))
+        Euler3D.SetCenter(NewVCenter)
         Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
         Euler3D.SetTranslation(Tvec)
         Euler3D.ComputeZYXOn()
         #########################################
-        # Extract 2D Image :
+
         Image2D = sitk.Resample(
             Image3D,
-            Sz,
+            Out_Size,
             Euler3D,
             sitk.sitkLinear,
-            Origin,
-            Sp,
-            Direction,
+            Out_Origin,
+            Out_Spacing,
+            Out_Direction,
             100,
         )
         #############################################
@@ -749,10 +820,10 @@ def AddAxialSlice():
 
     name = "AXIAL"
     DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
-    Sp, Sz, Origine, Direction = (
+    Sp, Sz, Origin, Direction = (
         DcmInfo["spacing"],
         DcmInfo["size"],
-        DcmInfo["origine"],
+        DcmInfo["Origin"],
         DcmInfo["direction"],
     )
 
