@@ -16,10 +16,6 @@ from bpy.props import (
     BoolProperty,
 )
 
-
-requirements = R"C:\MyPythonResources\Requirements"
-if not requirements in sys.path:
-    sys.path.append(requirements)
 import SimpleITK as sitk
 import cv2
 import vtk
