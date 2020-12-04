@@ -69,10 +69,12 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                             row = layout.row()
                             row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
-                            Slices = ("AXIAL", "CORONAL", "SAGITAL")
-                            if context.object:
+                            if (
+                                context.active_object
+                                and context.active_object.type == "MESH"
+                            ):
                                 obj = context.active_object
-                                if obj.name in Slices:
+                                if "_SLICE" in obj.name:
                                     split = layout.split(align=True)
                                     col = split.column()
                                     col.label(text=f" {obj.name} location:")
@@ -121,6 +123,8 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                                         index=2,
                                         text="Angle Z :",
                                     )
+                            row = layout.row()
+                            row.operator("bdental.tresh_segment")
 
                         else:
                             row = layout.row()
@@ -159,10 +163,12 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                             row = layout.row()
                             row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
-                            Slices = ("AXIAL", "CORONAL", "SAGITAL")
-                            if context.object:
+                            if (
+                                context.active_object
+                                and context.active_object.type == "MESH"
+                            ):
                                 obj = context.active_object
-                                if obj.name in Slices:
+                                if "_SLICE" in obj.name:
                                     split = layout.split(align=True)
                                     col = split.column()
                                     col.label(text=f" {obj.name} location:")
@@ -194,6 +200,8 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                                         obj, "rotation_euler", index=2, text="Angle Z :"
                                     )
 
+                            row = layout.row()
+                            row.operator("bdental.tresh_segment")
                         else:
                             row = layout.row()
                             row.operator(
