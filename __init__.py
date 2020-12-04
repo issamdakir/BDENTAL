@@ -72,8 +72,10 @@ def isConnected():
         return False
 
 
-if "cv2" in os.listdir(requirements_path) and "SimpleITK" in os.listdir(
-    requirements_path
+if (
+    "cv2" in os.listdir(requirements_path)
+    and "SimpleITK" in os.listdir(requirements_path)
+    and "vtk.py" in os.listdir(requirements_path)
 ):
     # Addon modules imports :
     from . import BDENTAL_Props, BDENTAL_Panel
@@ -117,41 +119,47 @@ else:
     ######################################################################################
     if isConnected():
 
-        # Download and install requirement if not Addon Packed :
-        Blender_python_path = sys.base_exec_prefix
-        Requirements = ["SimpleITK", "opencv-python"]
-        site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
-        subprocess.call(
-            f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
-            shell=True,
-        )
-        print("pip upgraded")
-        command_1 = f'cd "{Blender_python_path}" && bin\python -m pip install -U SimpleITK --target "{requirements_path}"'
-        subprocess.call(command_1, shell=True)
-        print("SimpleITK Downloaded installed")
-
-        command_2 = f'cd "{Blender_python_path}" && bin\python -m pip install -U opencv-python --target "{requirements_path}"'
-        subprocess.call(command_2, shell=True)
-        print("opencv-python Downloaded installed")
-
-        ##########################
-        print("requirements installed successfuly.")
-
-        ############################################################################################
-        # Registration :
-        ############################################################################################
-        # Addon modules imports :
-        from . import BDENTAL_Props, BDENTAL_Panel
-        from .Operators import BDENTAL_ScanOperators
-
-        addon_modules = [
-            BDENTAL_Props,
-            BDENTAL_Panel,
-            BDENTAL_ScanOperators,
-        ]
-        init_classes = []
-
         def register():
+            message = "Please be patient :) Downloading required packages... "
+            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+            # Download and install requirement if not Addon Packed :
+            Blender_python_path = sys.base_exec_prefix
+            Requirements = ["SimpleITK", "opencv-contrib-python", "vtk"]
+            site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
+            subprocess.call(
+                f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
+                shell=True,
+            )
+            print("pip upgraded")
+            command_1 = f'cd "{Blender_python_path}" && bin\python -m pip install -U SimpleITK --target "{requirements_path}"'
+            subprocess.call(command_1, shell=True)
+            print("SimpleITK Downloaded installed")
+
+            command_2 = f'cd "{Blender_python_path}" && bin\python -m pip install -U "opencv-contrib-python" --target "{requirements_path}"'
+            subprocess.call(command_2, shell=True)
+            print("opencv-python Downloaded installed")
+
+            command_3 = f'cd "{Blender_python_path}" && bin\python -m pip install -U vtk --target "{requirements_path}"'
+            subprocess.call(command_3, shell=True)
+            print("vtk Downloaded installed")
+
+            ##########################
+            print("requirements installed successfuly.")
+
+            ############################################################################################
+            # Registration :
+            ############################################################################################
+            # Addon modules imports :
+            from . import BDENTAL_Props, BDENTAL_Panel
+            from .Operators import BDENTAL_ScanOperators
+
+            addon_modules = [
+                BDENTAL_Props,
+                BDENTAL_Panel,
+                BDENTAL_ScanOperators,
+            ]
+            init_classes = []
+
             # activate io_import_images_as_planes built_in addon :
             addon_utils.enable(
                 "io_import_images_as_planes",
@@ -165,7 +173,7 @@ else:
             for cl in init_classes:
                 bpy.utils.register_class(cl)
 
-            message = "BDENTAL-SCAN-VIEWER enabled successfully :) "
+            message = "BDENTAL SCAN VIEWER enabled successfully ) "
             ShowMessageBox(message=message, icon="COLORSET_03_VEC")
 
         def unregister():
@@ -189,40 +197,3 @@ else:
 
         if __name__ == "__main__":
             register()
-# #########################################################################################################
-# # Addon modules imports :
-# from . import BDENTAL_Props, BDENTAL_Panel
-# from .Operators import BDENTAL_ScanOperators
-
-# ############################################################################################
-# # Registration :
-# ############################################################################################
-
-# addon_modules = [
-#     BDENTAL_Props,
-#     BDENTAL_Panel,
-#     BDENTAL_ScanOperators,
-# ]
-
-# init_classes = []
-
-# # Registration :
-# def register():
-#     for module in addon_modules:
-#         module.register()
-
-#     for cl in init_classes:
-#         bpy.utils.register_class(cl)
-
-
-# def unregister():
-
-#     for cl in init_classes:
-#         bpy.utils.unregister_class(cl)
-
-#     for module in reversed(addon_modules):
-#         module.unregister()
-
-
-# if __name__ == "__main__":
-#     register()
