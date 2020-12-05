@@ -298,6 +298,13 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
             for t in threads:
                 t.join()
 
+            if Preffix:
+                BlendFile = f"{Preffix}SCAN.blend"
+            else:
+                BlendFile = "SCAN.blend"
+            Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, BlendFile)
+            bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
+
             #############################################################################################
             finish = time.perf_counter()
             print(f"OPEN SCAN FINISHED in {finish-start} second(s)")
@@ -530,6 +537,12 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
 
             for t in threads:
                 t.join()
+            if Preffix:
+                BlendFile = f"{Preffix}SCAN.blend"
+            else:
+                BlendFile = "SCAN.blend"
+            Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, BlendFile)
+            bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
 
             #############################################################################################
             finish = time.perf_counter()
