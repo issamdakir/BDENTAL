@@ -124,7 +124,7 @@ class BDENTAL_Props(bpy.types.PropertyGroup):
     Wmax: IntProperty()
 
     #######################
-    SoftTissueMode = BoolProperty(description="SoftTissue Mode ", default=False)
+    # SoftTissueMode = BoolProperty(description="SoftTissue Mode ", default=False)
 
     GroupNodeName: StringProperty(
         name="Group shader Name",
@@ -145,26 +145,6 @@ class BDENTAL_Props(bpy.types.PropertyGroup):
         step=1,
     )
 
-    #######################
-    TresholdOffset: IntProperty(
-        name="Treshold Offset ",
-        description="Volume Treshold Offset (Soft Tissue Mode)",
-        default=100,
-        step=1,
-    )
-    #######################
-    SegmentName: StringProperty(
-        name="Segmentation Name",
-        default="",
-        description="Segmentation Name",
-    )
-    #######################
-    SegmentColor: FloatVectorProperty(
-        name="Segmentation Color",
-        description="Segmentation Color",
-        size=4,
-        subtype="COLOR",
-    )
     #######################
 
     CT_Loaded: BoolProperty(description="CT loaded ", default=False)

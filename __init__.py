@@ -120,12 +120,15 @@ else:
     if isConnected():
 
         def register():
-            message = "Please be patient :) Downloading required packages... "
-            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+
             # Download and install requirement if not Addon Packed :
             Blender_python_path = sys.base_exec_prefix
             Requirements = ["SimpleITK", "opencv-contrib-python", "vtk"]
             site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
+            subprocess.call(
+                f"cd {Blender_python_path} && bin\python -m ensurepip ",
+                shell=True,
+            )
             subprocess.call(
                 f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
                 shell=True,
