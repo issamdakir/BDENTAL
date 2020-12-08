@@ -89,18 +89,34 @@ def AddNode(nodes, type, name):
     return node
 
 
+def AddPlaneMesh(DimX, DimY, Name):
+    x = DimX / 2
+    y = DimY / 2
+    verts = [(-x, -y, 0.0), (x, -y, 0.0), (-x, y, 0.0), (x, y, 0.0)]
+    faces = [(0, 1, 3, 2)]
+    mesh = bpy.data.meshes.new(f"{Name}_mesh")
+    mesh.from_pydata(verts, [], faces)
+    uvs = mesh.uv_layers.new(name=f"{Name}_uv")
+    mesh.update()
+
+    return mesh
+
+
+def AddPlaneObject(Name, mesh, CollName):
+    Plane_obj = bpy.data.objects.new(Name, mesh)
+    Coll = bpy.data.collections.get(CollName)
+    if not Coll:
+        Coll = bpy.data.collections.new(CollName)
+        bpy.context.scene.collection.children.link(Coll)
+    if not Plane_obj in Coll.objects[:]:
+        Coll.objects.link(Plane_obj)
+
+    return Plane_obj
+
+
 def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
-    #################################################################################
-    Start = time.perf_counter()
+
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    # acctivate io_import_images_as_planes :
-    bpy.ops.preferences.addon_enable(module="io_import_images_as_planes")
-    # Set Render settings :
-    Scene_Settings()
-
-    os.chdir(PngDir)
-    ImagesList = sorted(os.listdir(PngDir))
-
     Sp = Spacing = DcmInfo["Spacing"]
     Sz = Size = DcmInfo["Size"]
     Origin = DcmInfo["Origin"]
@@ -108,27 +124,66 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     TransformMatrix = DcmInfo["TransformMatrix"]
     DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
     Offset = Sp[2]
+    ImagesList = sorted(os.listdir(PngDir))
+
+    #################################################################################
+    Start = time.perf_counter()
+    #################################################################################
+    # ///////////////////////////////////////////////////////////////////////////#
+    ######################## Set Render settings : #############################
+    Scene_Settings()
+    ###################### Change to ORTHO persp with nice view angle :##########
+    # ViewMatrix = Matrix(
+    #     (
+    #         (0.8435, -0.5371, -0.0000, 1.2269),
+    #         (0.2497, 0.3923, 0.8853, -15.1467),
+    #         (-0.4755, -0.7468, 0.4650, -55.2801),
+    #         (0.0000, 0.0000, 0.0000, 1.0000),
+    #     )
+    # )
+    ViewMatrix = Matrix(
+        (
+            (0.8677, -0.4971, 0.0000, 4.0023),
+            (0.4080, 0.7123, 0.5711, -14.1835),
+            (-0.2839, -0.4956, 0.8209, -94.0148),
+            (0.0000, 0.0000, 0.0000, 1.0000),
+        )
+    )
+    for scr in bpy.data.screens:
+        # if scr.name in ["Layout", "Scripting", "Shading"]:
+        for area in [ar for ar in scr.areas if ar.type == "VIEW_3D"]:
+            for space in [sp for sp in area.spaces if sp.type == "VIEW_3D"]:
+                r3d = space.region_3d
+                r3d.view_perspective = "ORTHO"
+                r3d.view_distance = 400
+                r3d.view_matrix = ViewMatrix
+                r3d.update()
+
+    ################### Load all PNG images : ###############################
+    for ImagePNG in ImagesList:
+        image_path = os.path.join(PngDir, ImagePNG)
+        bpy.data.images.load(image_path)
+
+    bpy.ops.file.pack_all()
 
     ###############################################################################################
     # Add Planes with textured material :
+    ###############################################################################################
     PlansList = []
+    ############################# START LOOP ##################################
 
     for i, ImagePNG in enumerate(ImagesList):
-        bpy.ops.import_image.to_plane(
-            files=[{"name": ImagePNG, "name": ImagePNG}],
-            directory=PngDir,
-            align_axis="Z+",
-            relative=False,
-            height=DimY,
-        )
+        # Add Plane :
+        ##########################################
+        Preffix = "PLANE_"
+        Name = f"{Preffix}{i}"
+        mesh = AddPlaneMesh(DimX, DimY, Name)
+        CollName = "CT Voxel"
 
-        bpy.ops.transform.translate(
-            value=(0, 0, Offset * i), constraint_axis=(False, False, True)
-        )
-        objName = ImagePNG.split(".")[0]
-        obj = bpy.data.objects[objName]
+        obj = AddPlaneObject(Name, mesh, CollName)
+        obj.location[2] = i * Offset
         PlansList.append(obj)
-        print(f"{ImagePNG} Processed ...")
+        ##########################################
         # Add Material :
         mat = bpy.data.materials.new(f"Voxelmat_{i}")
         mat.use_nodes = True
@@ -140,7 +195,6 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
             if node.type != "OUTPUT_MATERIAL":
                 nodes.remove(node)
 
-        image_path = os.path.join(PngDir, ImagePNG)
         ImageData = bpy.data.images.get(ImagePNG)
         TextureCoord = AddNode(nodes, type="ShaderNodeTexCoord", name="TextureCoord")
         ImageTexture = AddNode(nodes, type="ShaderNodeTexImage", name="Image Texture")
@@ -168,22 +222,21 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         for slot in obj.material_slots:
             bpy.ops.object.material_slot_remove()
 
-        bpy.ops.object.material_slot_add()
-
         obj.active_material = mat
 
         mat.blend_method = "HASHED"
         mat.shadow_method = "HASHED"
 
-        # move obj to COLLECTION : "CT_Scan Voxel"
-        MoveToCollection(obj, CollName="CT Voxel")
+        print(f"{ImagePNG} Processed ...")
+        bpy.ops.wm.redraw_timer(
+            type="DRAW_SWAP", iterations=3
+        )  # --Work good but Slow down volume Render
 
-        bpy.context.view_layer.update()
+        ############################# END LOOP ##################################
 
     # Join Planes Make Cube Voxel :
     bpy.ops.object.select_all(action="DESELECT")
     for obj in PlansList:
-        MoveToCollection(obj, CollName="CT Voxel")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 
@@ -203,30 +256,28 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
 
     Voxel.matrix_world = TransformMatrix
 
-    ### Change to ORTHO persp with nice view angle :
-    ViewMatrix = Matrix(
-        (
-            (0.8435, -0.5371, -0.0000, 1.2269),
-            (0.2497, 0.3923, 0.8853, -15.1467),
-            (-0.4755, -0.7468, 0.4650, -55.2801),
-            (0.0000, 0.0000, 0.0000, 1.0000),
-        )
-    )
-
-    bpy.ops.file.pack_all()
+    for area in bpy.context.screen.areas:
+        if area.type == "VIEW_3D":
+            area3D = area
+            for space in area3D.spaces:
+                if space.type == "VIEW_3D":
+                    space3D = space
+                    break
+            for region in area3D.regions:
+                if region.type == "WINDOW":
+                    r3D = region
+                    break
+    override = bpy.context.copy()
+    override["area"] = area3D
+    override["space_data"] = space3D
+    override["region"] = r3D
+    bpy.ops.view3d.view_selected(override, use_all_regions=False)
 
     for scr in bpy.data.screens:
         # if scr.name in ["Layout", "Scripting", "Shading"]:
         for area in [ar for ar in scr.areas if ar.type == "VIEW_3D"]:
             for space in [sp for sp in area.spaces if sp.type == "VIEW_3D"]:
-                r3d = space.region_3d
-                r3d.view_perspective = "ORTHO"
-                r3d.view_distance = 150
-                r3d.view_matrix = ViewMatrix
-                r3d.update()
-                # space.show_region_ui = False
                 space.shading.type = "MATERIAL"
-                bpy.ops.view3d.view_selected(use_all_regions=False)
 
     for i in range(3):
         Voxel.lock_location[i] = True
@@ -259,7 +310,7 @@ def Scene_Settings():
                 # space.shading.use_scene_world_render = True
 
                 space.shading.studio_light = "forest.exr"
-                space.shading.studiolight_rotate_z = 120
+                space.shading.studiolight_rotate_z = 0
                 space.shading.studiolight_intensity = 1.5
                 space.shading.studiolight_background_alpha = 0.0
                 space.shading.studiolight_background_blur = 0.0
@@ -282,7 +333,7 @@ def Scene_Settings():
     scn.eevee.shadow_cube_size = "512"
     scn.eevee.shadow_cascade_size = "512"
     scn.eevee.use_soft_shadows = True
-    scn.eevee.taa_samples = 32
+    scn.eevee.taa_samples = 16
     scn.display_settings.display_device = "None"
     scn.view_settings.look = "Medium Low Contrast"
     scn.view_settings.exposure = 0.0
@@ -786,11 +837,34 @@ def AddSagitalSlice():
 #############################################################################
 # SimpleITK vtk Image to Mesh Functions :
 #############################################################################
+def HuTo255(Hu, Wmin, Wmax):
+    V255 = int(((Hu - Wmin) / (Wmax - Wmin)) * 255)
+    return V255
+
+
+def ResizeImage(sitkImage, Ratio):
+    image = sitkImage
+    Sz = image.GetSize()
+    Sp = image.GetSpacing()
+    new_size = [int(Sz[0] * Ratio), int(Sz[1] * Ratio), int(Sz[2] * Ratio)]
+    new_spacing = [Sp[0] / Ratio, Sp[1] / Ratio, Sp[2] / Ratio]
+    ResizedImage = sitk.Resample(
+        image1=image,
+        size=new_size,
+        transform=sitk.Transform(),
+        interpolator=sitk.sitkLinear,
+        outputOrigin=image.GetOrigin(),
+        outputSpacing=new_spacing,
+        outputDirection=image.GetDirection(),
+        defaultPixelValue=0,
+        outputPixelType=image.GetPixelID(),
+    )
+    return ResizedImage
 
 
 def sitkTovtk(sitkImage):
     """Convert sitk image to a VTK image"""
-    sitkArray = sitk.GetArrayFromImage(sitkImage)
+    sitkArray = sitk.GetArrayFromImage(sitkImage)  # .astype(np.uint8)
     vtkImage = vtk.vtkImageData()
 
     Sp = Spacing = sitkImage.GetSpacing()
@@ -802,7 +876,9 @@ def sitkTovtk(sitkImage):
     vtkImage.SetDirectionMatrix(1, 0, 0, 0, 1, 0, 0, 0, 1)
     vtkImage.SetExtent(0, Sz[0] - 1, 0, Sz[1] - 1, 0, Sz[2] - 1)
 
-    VtkArray = numpy_support.numpy_to_vtk(sitkArray.ravel())
+    VtkArray = numpy_support.numpy_to_vtk(
+        sitkArray.ravel(), deep=True, array_type=vtk.VTK_UNSIGNED_INT
+    )
     VtkArray.SetNumberOfComponents(1)
     vtkImage.GetPointData().SetScalars(VtkArray)
 
@@ -882,11 +958,6 @@ def vtkCleanMesh(mesh, connectivityFilter=False):
     CleanFilter.Update()
     mesh.DeepCopy(CleanFilter.GetOutput())
     return mesh
-
-
-def HuTo255(Hu, Wmin, Wmax):
-    V255 = ((Hu - Wmin) / (Wmax - Wmin)) * 255
-    return V255
 
 
 def sitkToContourArray(sitkImage, HuMin, HuMax, Wmin, Wmax, Thikness):

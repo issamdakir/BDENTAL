@@ -35,6 +35,9 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
         # Draw Addon UI :
 
         layout = self.layout
+        # row = layout.row()
+        # row.operator("bdental.addplanes", icon="COLORSET_03_VEC")
+
         row = layout.row()
         row.prop(BDENTAL_Props, "UserProjectDir", text="Project Directory")
 

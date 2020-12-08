@@ -242,12 +242,12 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
             PatientID = DcmInfo["PatientID"]
             Preffix = PatientName or PatientID
             if Preffix:
-                NrrdHuPath = os.path.join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
+                # NrrdHuPath = os.path.join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
                 Nrrd255Path = os.path.join(UserProjectDir, f"{Preffix}_Image3D255.nrrd")
             else:
-                NrrdHuPath = os.path.join(UserProjectDir, "Image3DHu.nrrd")
+                # NrrdHuPath = os.path.join(UserProjectDir, "Image3DHu.nrrd")
                 Nrrd255Path = os.path.join(UserProjectDir, "Image3D255.nrrd")
-            BDENTAL_Props.NrrdHuPath = NrrdHuPath
+            # BDENTAL_Props.NrrdHuPath = NrrdHuPath
             BDENTAL_Props.Nrrd255Path = Nrrd255Path
 
             #######################################################################################
@@ -264,7 +264,7 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
             )
 
             # Convert Dicom to nrrd file :
-            sitk.WriteImage(Image3D, NrrdHuPath)
+            # sitk.WriteImage(Image3D, NrrdHuPath)
             sitk.WriteImage(Image3D_255, Nrrd255Path)
 
             #############################################################################################
@@ -482,12 +482,12 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             PatientID = DcmInfo["PatientID"]
             Preffix = PatientName or PatientID
             if Preffix:
-                NrrdHuPath = os.path.join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
+                # NrrdHuPath = os.path.join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
                 Nrrd255Path = os.path.join(UserProjectDir, f"{Preffix}_Image3D255.nrrd")
             else:
-                NrrdHuPath = os.path.join(UserProjectDir, "Image3DHu.nrrd")
+                # NrrdHuPath = os.path.join(UserProjectDir, "Image3DHu.nrrd")
                 Nrrd255Path = os.path.join(UserProjectDir, "Image3D255.nrrd")
-            BDENTAL_Props.NrrdHuPath = NrrdHuPath
+            # BDENTAL_Props.NrrdHuPath = NrrdHuPath
             BDENTAL_Props.Nrrd255Path = Nrrd255Path
 
             #######################################################################################
@@ -504,7 +504,7 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             )
 
             # Convert Dicom to nrrd file :
-            sitk.WriteImage(Image3D, NrrdHuPath)
+            # sitk.WriteImage(Image3D, NrrdHuPath)
             sitk.WriteImage(Image3D_255, Nrrd255Path)
 
             #############################################################################################
@@ -665,8 +665,9 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
 
     def invoke(self, context, event):
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-        NrrdHuPath = BDENTAL_Props.NrrdHuPath
-        if os.path.exists(NrrdHuPath):
+        # NrrdHuPath = BDENTAL_Props.NrrdHuPath
+        Nrrd255Path = BDENTAL_Props.Nrrd255Path
+        if os.path.exists(Nrrd255Path):
             wm = context.window_manager
             return wm.invoke_props_dialog(self)
 
@@ -680,7 +681,8 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         # Load Infos :
         #########################################################################
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-        NrrdHuPath = BDENTAL_Props.NrrdHuPath
+        # NrrdHuPath = BDENTAL_Props.NrrdHuPath
+        Nrrd255Path = BDENTAL_Props.Nrrd255Path
         UserProjectDir = BDENTAL_Props.UserProjectDir
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
         Origin = DcmInfo["Origin"]
@@ -694,30 +696,47 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         SegmentColor = self.SegmentColor
         StlPath = os.path.join(UserProjectDir, f"{SegmentName}_SEGMENTATION.stl")
         Thikness = 1
-        Reduction = 0.95
-        SmoothIterations = SmthIter = 10
+        # Reduction = 0.9
+        SmoothIterations = SmthIter = 3
         #########################################################################
         start = time.perf_counter()
 
-        Image3D = sitk.ReadImage(NrrdHuPath)
-
+        Image3D = sitk.ReadImage(Nrrd255Path)
+        Sz = Image3D.GetSize()
+        OriginalSize = Sz[0] * Sz[1] * Sz[2]
+        if OriginalSize > 100000000:
+            SampleRatio = 100000000 / OriginalSize
+            ResizedImage = ResizeImage(sitkImage=Image3D, Ratio=SampleRatio)
+            Image3D = ResizedImage
+            print(f"Image DOWN Sampled : SampleRatio = {SampleRatio}")
         print("CONVERTING IMAGE...")
         vtkImage = sitkTovtk(sitkImage=Image3D)
 
         print("EXTRACTING Mesh...")
-        ExtractedMesh = vtk_MC_Func(vtkImage=vtkImage, Treshold=Treshold)
-        print(f"ExtractedMesh polygons count : {ExtractedMesh.GetNumberOfPolys()} ...")
+        Treshold255 = HuTo255(Hu=Treshold, Wmin=Wmin, Wmax=Wmax)
+        if Treshold255 == 0:
+            Treshold255 = 1
+        elif Treshold255 == 255:
+            Treshold255 = 254
+        ExtractedMesh = vtk_MC_Func(vtkImage=vtkImage, Treshold=Treshold255)
+        polysCount = ExtractedMesh.GetNumberOfPolys()
+        print(f"ExtractedMesh polygons count : {polysCount} ...")
 
-        print("MESH REDUCTION...")
+        Reduction = 0.0
+        polysLimit = 250000
+        if polysCount > polysLimit:
+            Reduction = round(1 - (polysLimit / polysCount), 2)
+
+        print(f"MESH REDUCTION: Ratio = {Reduction}...")
         ReductedMesh = vtkMeshReduction(mesh=ExtractedMesh, reduction=Reduction)
         print(f"ReductedMesh polygons count : {ReductedMesh.GetNumberOfPolys()} ...")
 
-        print("SMOOTHING...")
-        SmoothedMesh = vtkSmoothMesh(mesh=ReductedMesh, Iterations=SmthIter)
-        print(f"SmoothedMesh polygons count : {SmoothedMesh.GetNumberOfPolys()} ...")
+        # print("SMOOTHING...")
+        # SmoothedMesh = vtkSmoothMesh(mesh=ReductedMesh, Iterations=SmthIter)
+        # print(f"SmoothedMesh polygons count : {SmoothedMesh.GetNumberOfPolys()} ...")
 
         print("SET MESH ORIENTATION...")
-        TransformedMesh = vtkTransformMesh(mesh=SmoothedMesh, Matrix=VtkMatrix)
+        TransformedMesh = vtkTransformMesh(mesh=ReductedMesh, Matrix=VtkMatrix)
 
         print("WRITING...")
         writer = vtk.vtkSTLWriter()
@@ -740,6 +759,10 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         mat.diffuse_color = SegmentColor
         obj.data.materials.append(mat)
         MoveToCollection(obj=obj, CollName="SEGMENTS")
+
+        bpy.ops.object.modifier_add(type="CORRECTIVE_SMOOTH")
+        bpy.context.object.modifiers["CorrectiveSmooth"].iterations = 3
+        bpy.context.object.modifiers["CorrectiveSmooth"].use_only_smooth = True
 
         finish = time.perf_counter()
         print(f"FINISHED in {finish-start} secondes")
