@@ -133,14 +133,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     ######################## Set Render settings : #############################
     Scene_Settings()
     ###################### Change to ORTHO persp with nice view angle :##########
-    # ViewMatrix = Matrix(
-    #     (
-    #         (0.8435, -0.5371, -0.0000, 1.2269),
-    #         (0.2497, 0.3923, 0.8853, -15.1467),
-    #         (-0.4755, -0.7468, 0.4650, -55.2801),
-    #         (0.0000, 0.0000, 0.0000, 1.0000),
-    #     )
-    # )
+    
     ViewMatrix = Matrix(
         (
             (0.8677, -0.4971, 0.0000, 4.0023),
@@ -155,7 +148,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
             for space in [sp for sp in area.spaces if sp.type == "VIEW_3D"]:
                 r3d = space.region_3d
                 r3d.view_perspective = "ORTHO"
-                r3d.view_distance = 400
+                r3d.view_distance = 320
                 r3d.view_matrix = ViewMatrix
                 r3d.update()
 
@@ -228,9 +221,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         mat.shadow_method = "HASHED"
 
         print(f"{ImagePNG} Processed ...")
-        bpy.ops.wm.redraw_timer(
-            type="DRAW_SWAP", iterations=3
-        )  # --Work good but Slow down volume Render
+#         bpy.ops.wm.redraw_timer(type="DRAW_SWAP", iterations=3)  # --Work quite good but Slow down volume Render
 
         ############################# END LOOP ##################################
 
