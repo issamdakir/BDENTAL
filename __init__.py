@@ -29,7 +29,7 @@ bl_info = {
     "location": "3D View -> UI SIDE PANEL ",
     "description": "3D Tools suite for Digital Dentistry",  ########### Addon description
     "warning": "",
-    "wiki_url": "",
+    "doc_url": "",
     "tracker_url": "",
     "category": "Dental",  ################## Addon category
 }
@@ -37,8 +37,14 @@ bl_info = {
 # IMPORTS :
 #############################################################################################
 # Python imports :
-import sys, os, bpy, subprocess, socket, time, addon_utils
+import sys, os, bpy, subprocess, socket, time, addon_utils, platform
+from importlib import import_module
 
+# activate unicode characters in windows CLI :
+if platform.system() == "Windows":
+    sys.stdout.reconfigure(encoding="cp65001")
+    # cmd = "chcp 65001"  # "& set PYTHONIOENCODING=utf-8"
+    # subprocess.call(cmd, shell=True)
 
 #############################################################
 # Add sys Paths : Addon directory and requirements directory
@@ -51,13 +57,11 @@ for path in sysPaths:
     if not path in sys.path:
         sys.path.append(path)
 
-
-def ShowMessageBox(message="", title="INFO", icon="INFO"):
-    def draw(self, context):
-        self.layout.label(text=message)
-
-    bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
-    return
+Requirements = {
+    "SimpleITK": "SimpleITK==2.0.2",
+    "vtk": "vtk==9.0.1",
+    "cv2": "opencv-contrib-python",  # working version4.4.0.46 # Uptodate 01082021: 4.5.1.48
+}
 
 
 def isConnected():
@@ -72,14 +76,51 @@ def isConnected():
         return False
 
 
-if (
-    "cv2" in os.listdir(requirements_path)
-    and "SimpleITK" in os.listdir(requirements_path)
-    and "vtk.py" in os.listdir(requirements_path)
-):
+def BlenderRequirementsPipInstall(path, modules):
+    # Download and install requirement if not AddonPacked version:
+    Blender_python_path = os.path.join(sys.base_exec_prefix, "bin")
+    site_packages = os.path.join(Blender_python_path, "lib\\site-packages\\*.*")
+    subprocess.call(
+        f"cd {Blender_python_path} && python -m ensurepip ",
+        shell=True,
+    )
+    subprocess.call(
+        f"cd {Blender_python_path} && python -m pip install -U pip ",
+        shell=True,
+    )
+    print("Blender pip upgraded")
+
+    for module in modules:
+        command = f'cd "{Blender_python_path}" && python -m pip install {module} --target "{path}"'
+        subprocess.call(command, shell=True)
+        print(f"{module}Downloaded and installed")
+
+    ##########################
+    print("requirements installed successfuly.")
+
+
+##########################################################################
+##########################################################################
+##########################################################################
+
+# if (
+#     "cv2" in os.listdir(requirements_path)
+#     and "SimpleITK" in os.listdir(requirements_path)
+#     and "vtk.py" in os.listdir(requirements_path)
+# ):
+NotFoundPkgs = []
+for mod, pkg in Requirements.items():
+    try:
+        import_module(mod)
+    except ImportError:
+        NotFoundPkgs.append(pkg)
+
+if NotFoundPkgs == []:
+
+    print("Requirement already installed")
     # Addon modules imports :
     from . import BDENTAL_Props, BDENTAL_Panel
-    from .Operators import BDENTAL_ScanOperators
+    from .Operators import BDENTAL_ScanOperators, AlignOperators
 
     ############################################################################################
     # Registration :
@@ -88,17 +129,11 @@ if (
         BDENTAL_Props,
         BDENTAL_Panel,
         BDENTAL_ScanOperators,
+        AlignOperators,
     ]
     init_classes = []
 
     def register():
-        # activate io_import_images_as_planes built_in addon :
-        addon_utils.enable(
-            "io_import_images_as_planes",
-            default_set=True,
-            persistent=True,
-            handle_error=None,
-        )
 
         for module in addon_modules:
             module.register()
@@ -115,69 +150,31 @@ if (
         register()
 
 else:
-
+    for pkg in NotFoundPkgs:
+        print(f"{pkg} : not installed")
     ######################################################################################
     if isConnected():
+        BlenderRequirementsPipInstall(path=requirements_path, modules=NotFoundPkgs)
+        # Addon modules imports :
+        from . import BDENTAL_Props, BDENTAL_Panel
+        from .Operators import BDENTAL_ScanOperators, AlignOperators
 
+        addon_modules = [
+            BDENTAL_Props,
+            BDENTAL_Panel,
+            BDENTAL_ScanOperators,
+            AlignOperators,
+        ]
+        init_classes = []
+
+        ############################################################################################
+        # Registration :
+        ############################################################################################
         def register():
-
-            # Download and install requirement if not Addon Packed :
-            Blender_python_path = sys.base_exec_prefix
-            Requirements = ["SimpleITK", "opencv-contrib-python", "vtk"]
-            site_packages = os.path.join(Blender_python_path, "lib\site-packages\*.*")
-            subprocess.call(
-                f"cd {Blender_python_path} && bin\python -m ensurepip ",
-                shell=True,
-            )
-            subprocess.call(
-                f"cd {Blender_python_path} && bin\python -m pip install -U pip ",
-                shell=True,
-            )
-            print("pip upgraded")
-            command_1 = f'cd "{Blender_python_path}" && bin\python -m pip install -U SimpleITK --target "{requirements_path}"'
-            subprocess.call(command_1, shell=True)
-            print("SimpleITK Downloaded installed")
-
-            command_2 = f'cd "{Blender_python_path}" && bin\python -m pip install -U "opencv-contrib-python" --target "{requirements_path}"'
-            subprocess.call(command_2, shell=True)
-            print("opencv-python Downloaded installed")
-
-            command_3 = f'cd "{Blender_python_path}" && bin\python -m pip install -U vtk --target "{requirements_path}"'
-            subprocess.call(command_3, shell=True)
-            print("vtk Downloaded installed")
-
-            ##########################
-            print("requirements installed successfuly.")
-
-            ############################################################################################
-            # Registration :
-            ############################################################################################
-            # Addon modules imports :
-            from . import BDENTAL_Props, BDENTAL_Panel
-            from .Operators import BDENTAL_ScanOperators
-
-            addon_modules = [
-                BDENTAL_Props,
-                BDENTAL_Panel,
-                BDENTAL_ScanOperators,
-            ]
-            init_classes = []
-
-            # activate io_import_images_as_planes built_in addon :
-            addon_utils.enable(
-                "io_import_images_as_planes",
-                default_set=True,
-                persistent=True,
-                handle_error=None,
-            )
-
             for module in addon_modules:
                 module.register()
             for cl in init_classes:
                 bpy.utils.register_class(cl)
-
-            message = "BDENTAL SCAN VIEWER enabled successfully ) "
-            ShowMessageBox(message=message, icon="COLORSET_03_VEC")
 
         def unregister():
             for cl in init_classes:
@@ -193,7 +190,7 @@ else:
         def register():
 
             message = "Please Check Internet Connexion and restart Blender! "
-            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+            print(message)
 
         def unregister():
             pass

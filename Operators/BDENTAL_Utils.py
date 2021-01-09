@@ -1,21 +1,16 @@
 # # Python imports :
 
-import time
-import os
-import sys
-import shutil
-import math
+import time, os, sys, shutil, math, threading, platform, subprocess, string
 from math import degrees, radians, pi
-import threading
-
-requirements = R"C:\MyPythonResources\Requirements"
-if not requirements in sys.path:
-    sys.path.append(requirements)
 import numpy as np
+from time import sleep, perf_counter as counter
+from queue import Queue
+
 import SimpleITK as sitk
 import cv2
 import vtk
 from vtk.util import numpy_support
+from vtk import vtkCommand
 
 # Blender Imports :
 import bpy
@@ -24,6 +19,7 @@ from mathutils import Matrix, Vector, Euler, kdtree
 
 # Global Variables :
 addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ProgEvent = vtkCommand.ProgressEvent
 
 #######################################################################################
 # Popup message box function :
@@ -65,6 +61,24 @@ def CopyDcmSerieToProjDir(DcmSerie, DicomSeqDir):
 ##########################################################################################
 
 
+def PlaneCut(Target, Plane, inner=False, outer=False, fill=False):
+
+    bpy.ops.object.select_all(action="DESELECT")
+    Target.select_set(True)
+    bpy.context.view_layer.objects.active = Target
+
+    Pco = Plane.matrix_world.translation
+    Pno = Plane.matrix_world.to_3x3().transposed()[2]
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.bisect(
+        plane_co=Pco, plane_no=Pno, use_fill=fill, clear_inner=inner, clear_outer=outer
+    )
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
 def AddBooleanCube(DimX, DimY, DimZ):
     bpy.ops.mesh.primitive_cube_add(
         size=max(DimX, DimY, DimZ) * 1.5,
@@ -94,12 +108,19 @@ def AddPlaneMesh(DimX, DimY, Name):
     y = DimY / 2
     verts = [(-x, -y, 0.0), (x, -y, 0.0), (-x, y, 0.0), (x, y, 0.0)]
     faces = [(0, 1, 3, 2)]
-    mesh = bpy.data.meshes.new(f"{Name}_mesh")
-    mesh.from_pydata(verts, [], faces)
-    uvs = mesh.uv_layers.new(name=f"{Name}_uv")
-    mesh.update()
+    mesh_data = bpy.data.meshes.new(f"{Name}_mesh")
+    mesh_data.from_pydata(verts, [], faces)
+    uvs = mesh_data.uv_layers.new(name=f"{Name}_uv")
+    # Returns True if any invalid geometry was removed.
+    corrections = mesh_data.validate(verbose=True, clean_customdata=True)
+    # Load BMesh with mesh data.
+    bm = bmesh.new()
+    bm.from_mesh(mesh_data)
+    bm.to_mesh(mesh_data)
+    bm.free()
+    mesh_data.update(calc_edges=True, calc_edges_loose=True)
 
-    return mesh
+    return mesh_data
 
 
 def AddPlaneObject(Name, mesh, CollName):
@@ -112,6 +133,21 @@ def AddPlaneObject(Name, mesh, CollName):
         Coll.objects.link(Plane_obj)
 
     return Plane_obj
+
+
+def MoveToCollection(obj, CollName):
+
+    OldColl = obj.users_collection  # list of all collection the obj is in
+    NewColl = bpy.data.collections.get(CollName)
+    if not NewColl:
+        NewColl = bpy.data.collections.new(CollName)
+        bpy.context.scene.collection.children.link(NewColl)
+    if not obj in NewColl.objects[:]:
+        NewColl.objects.link(obj)  # link obj to scene
+    if OldColl:
+        for Coll in OldColl:  # unlink from all  precedent obj collections
+            if Coll is not NewColl:
+                Coll.objects.unlink(obj)
 
 
 def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
@@ -133,7 +169,14 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     ######################## Set Render settings : #############################
     Scene_Settings()
     ###################### Change to ORTHO persp with nice view angle :##########
-    
+    # ViewMatrix = Matrix(
+    #     (
+    #         (0.8435, -0.5371, -0.0000, 1.2269),
+    #         (0.2497, 0.3923, 0.8853, -15.1467),
+    #         (-0.4755, -0.7468, 0.4650, -55.2801),
+    #         (0.0000, 0.0000, 0.0000, 1.0000),
+    #     )
+    # )
     ViewMatrix = Matrix(
         (
             (0.8677, -0.4971, 0.0000, 4.0023),
@@ -148,7 +191,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
             for space in [sp for sp in area.spaces if sp.type == "VIEW_3D"]:
                 r3d = space.region_3d
                 r3d.view_perspective = "ORTHO"
-                r3d.view_distance = 320
+                r3d.view_distance = 400
                 r3d.view_matrix = ViewMatrix
                 r3d.update()
 
@@ -166,8 +209,8 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     ############################# START LOOP ##################################
 
     for i, ImagePNG in enumerate(ImagesList):
-        # Add Plane :
-        ##########################################
+        # # Add Plane :
+        # ##########################################
         Preffix = "PLANE_"
         Name = f"{Preffix}{i}"
         mesh = AddPlaneMesh(DimX, DimY, Name)
@@ -176,6 +219,19 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         obj = AddPlaneObject(Name, mesh, CollName)
         obj.location[2] = i * Offset
         PlansList.append(obj)
+        ##########################################
+        # # Add Plane :
+        # Preffix = "PLANE_"
+        # Name = f"{Preffix}{i}"
+        # CollName = "CT Voxel"
+        # bpy.ops.mesh.primitive_plane_add()
+        # obj = bpy.context.active_object
+        # obj.dimensions = (DimX, DimY, 0)
+        # obj.name = Name
+        # obj.data.name = Name
+        # obj.location[2] = i * Offset
+        # MoveToCollection(obj, CollName)
+        # PlansList.append(obj)
         ##########################################
         # Add Material :
         mat = bpy.data.materials.new(f"Voxelmat_{i}")
@@ -220,8 +276,8 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         mat.blend_method = "HASHED"
         mat.shadow_method = "HASHED"
 
-        print(f"{ImagePNG} Processed ...")
-#         bpy.ops.wm.redraw_timer(type="DRAW_SWAP", iterations=3)  # --Work quite good but Slow down volume Render
+        # print(f"{ImagePNG} Processed ...")
+        # bpy.ops.wm.redraw_timer(type="DRAW_SWAP", iterations=3)  # --Work good but Slow down volume Render
 
         ############################# END LOOP ##################################
 
@@ -297,8 +353,8 @@ def Scene_Settings():
                 space.shading.use_scene_world = False
 
                 # 'RENDERED' Shading Light method :
-                # space.shading.use_scene_lights_render = False
-                # space.shading.use_scene_world_render = True
+                space.shading.use_scene_lights_render = False
+                space.shading.use_scene_world_render = True
 
                 space.shading.studio_light = "forest.exr"
                 space.shading.studiolight_rotate_z = 0
@@ -310,8 +366,13 @@ def Scene_Settings():
 
                 space.shading.type = "SOLID"
                 space.shading.color_type = "TEXTURE"
-                space.shading.light = "MATCAP"
-                space.shading.studio_light = "basic_side.exr"
+                # space.shading.light = "MATCAP"
+                # space.shading.studio_light = "basic_side.exr"
+                bpy.context.space_data.shading.light = "STUDIO"
+                bpy.context.space_data.shading.studio_light = "outdoor.sl"
+                bpy.context.space_data.shading.show_cavity = True
+                bpy.context.space_data.shading.curvature_ridge_factor = 0.5
+                bpy.context.space_data.shading.curvature_valley_factor = 0.5
 
     scn = bpy.context.scene
     scn.render.engine = "BLENDER_EEVEE"
@@ -329,21 +390,7 @@ def Scene_Settings():
     scn.view_settings.look = "Medium Low Contrast"
     scn.view_settings.exposure = 0.0
     scn.view_settings.gamma = 1.0
-
-
-def MoveToCollection(obj, CollName):
-
-    OldColl = obj.users_collection  # list of all collection the obj is in
-    NewColl = bpy.data.collections.get(CollName)
-    if not NewColl:
-        NewColl = bpy.data.collections.new(CollName)
-        bpy.context.scene.collection.children.link(NewColl)
-    if not obj in NewColl.objects[:]:
-        NewColl.objects.link(obj)  # link obj to scene
-
-    for Coll in OldColl:  # unlink from all  precedent obj collections
-        if Coll is not NewColl:
-            Coll.objects.unlink(obj)
+    scn.eevee.use_ssr = True
 
 
 #################################################################################################
@@ -358,7 +405,7 @@ def AxialSliceUpdate(scene):
     TransformMatrix = DcmInfo["TransformMatrix"]
 
     ImagePath = os.path.join(SlicesDir, "AXIAL_SLICE.png")
-    Plane = bpy.context.scene.objects["AXIAL_SLICE"]
+    Plane = bpy.context.scene.objects.get("AXIAL_SLICE")
 
     if Plane and os.path.exists(ImageData):
 
@@ -397,7 +444,7 @@ def AxialSliceUpdate(scene):
         ##########################################
         # Euler3DTransform :
         Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter(NewVCenter)
+        Euler3D.SetCenter((0, 0, 0))
         Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
         Euler3D.SetTranslation(Tvec)
         Euler3D.ComputeZYXOn()
@@ -436,7 +483,7 @@ def CoronalSliceUpdate(scene):
     TransformMatrix = DcmInfo["TransformMatrix"]
 
     ImagePath = os.path.join(SlicesDir, "CORONAL_SLICE.png")
-    Plane = bpy.context.scene.objects["CORONAL_SLICE"]
+    Plane = bpy.context.scene.objects.get("CORONAL_SLICE")
 
     if Plane and os.path.exists(ImageData):
 
@@ -514,7 +561,7 @@ def SagitalSliceUpdate(scene):
     TransformMatrix = DcmInfo["TransformMatrix"]
 
     ImagePath = os.path.join(SlicesDir, "SAGITAL_SLICE.png")
-    Plane = bpy.context.scene.objects["SAGITAL_SLICE"]
+    Plane = bpy.context.scene.objects.get("SAGITAL_SLICE")
 
     if Plane and os.path.exists(ImageData):
 
@@ -839,18 +886,102 @@ def ResizeImage(sitkImage, Ratio):
     Sp = image.GetSpacing()
     new_size = [int(Sz[0] * Ratio), int(Sz[1] * Ratio), int(Sz[2] * Ratio)]
     new_spacing = [Sp[0] / Ratio, Sp[1] / Ratio, Sp[2] / Ratio]
+
     ResizedImage = sitk.Resample(
-        image1=image,
-        size=new_size,
-        transform=sitk.Transform(),
-        interpolator=sitk.sitkLinear,
-        outputOrigin=image.GetOrigin(),
-        outputSpacing=new_spacing,
-        outputDirection=image.GetDirection(),
-        defaultPixelValue=0,
-        outputPixelType=image.GetPixelID(),
+        image,
+        new_size,
+        sitk.Transform(),
+        sitk.sitkLinear,
+        image.GetOrigin(),
+        new_spacing,
+        image.GetDirection(),
+        0,
     )
     return ResizedImage
+
+
+# def VTK_Terminal_progress(caller, event, q):
+#     ProgRatio = round(float(caller.GetProgress()), 2)
+#     q.put(
+#         ["loop", f"PROGRESS : {step} processing...", "", {start}, {finish}, ProgRatio]
+#     )
+
+
+def VTKprogress(caller, event):
+    pourcentage = int(caller.GetProgress() * 100)
+    calldata = str(int(caller.GetProgress() * 100)) + " %"
+    # print(calldata)
+    sys.stdout.write(f"\r {calldata}")
+    sys.stdout.flush()
+    progress_bar(pourcentage, Delay=1)
+
+
+def TerminalProgressBar(
+    q, counter_start, iter=100, maxfill=20, symb1="\u2588", symb2="\u2502", periode=10
+):
+
+    if platform.system() == "Windows":
+        cmd = "chcp 65001 & set PYTHONIOENCODING=utf-8"
+        subprocess.call(cmd, shell=True)
+
+    print("\n")
+
+    while True:
+        if not q.empty():
+            signal = q.get()
+
+            if "End" in signal[0]:
+                finish = counter()
+                line = f"{symb1*maxfill}  100% Finished.------Total Time : {round(finish-counter_start,2)}"
+                # clear sys.stdout line and return to line start:
+                # sys.stdout.write("\r")
+                # sys.stdout.write(" " * 100)
+                # sys.stdout.flush()
+                # sys.stdout.write("\r")
+                # write line :
+                sys.stdout.write("\r" + " " * 80 + "\r" + line)  # f"{Char}"*i*2
+                sys.stdout.flush()
+                break
+
+            if "GuessTime" in signal[0]:
+                _, Uptxt, Lowtxt, start, finish, periode = signal
+                for i in range(iter):
+
+                    if q.empty():
+
+                        ratio = start + (((i + 1) / iter) * (finish - start))
+                        pourcentage = int(ratio * 100)
+                        symb1_fill = int(ratio * maxfill)
+                        symb2_fill = int(maxfill - symb1_fill)
+                        line = f"{symb1*symb1_fill}{symb2*symb2_fill}  {pourcentage}% {Uptxt}"
+                        # clear sys.stdout line and return to line start:
+                        # sys.stdout.write("\r"+" " * 80)
+                        # sys.stdout.flush()
+                        # write line :
+                        sys.stdout.write("\r" + " " * 80 + "\r" + line)  # f"{Char}"*i*2
+                        sys.stdout.flush()
+                        sleep(periode / iter)
+                    else:
+                        break
+
+            if "loop" in signal[0]:
+                _, Uptxt, Lowtxt, start, finish, progFloat = signal
+                ratio = start + (progFloat * (finish - start))
+                pourcentage = int(ratio * 100)
+                symb1_fill = int(ratio * maxfill)
+                symb2_fill = int(maxfill - symb1_fill)
+                line = f"{symb1*symb1_fill}{symb2*symb2_fill}  {pourcentage}% {Uptxt}"
+                # clear sys.stdout line and return to line start:
+                # sys.stdout.write("\r")
+                # sys.stdout.write(" " * 100)
+                # sys.stdout.flush()
+                # sys.stdout.write("\r")
+                # write line :
+                sys.stdout.write("\r" + " " * 80 + "\r" + line)  # f"{Char}"*i*2
+                sys.stdout.flush()
+
+        else:
+            time.sleep(0.1)
 
 
 def sitkTovtk(sitkImage):
@@ -888,21 +1019,55 @@ def vtk_MC_Func(vtkImage, Treshold):
     return mesh
 
 
-def vtkMeshReduction(mesh, reduction):
+def vtkMeshReduction(q, mesh, reduction, step, start, finish):
+    """Reduce a mesh using VTK's vtkQuadricDecimation filter."""
+
+    def VTK_Terminal_progress(caller, event):
+        ProgRatio = round(float(caller.GetProgress()), 2)
+        q.put(
+            [
+                "loop",
+                f"PROGRESS : {step}...",
+                "",
+                start,
+                finish,
+                ProgRatio,
+            ]
+        )
+
     decimatFilter = vtk.vtkQuadricDecimation()
     decimatFilter.SetInputData(mesh)
     decimatFilter.SetTargetReduction(reduction)
+
+    decimatFilter.AddObserver(ProgEvent, VTK_Terminal_progress)
     decimatFilter.Update()
+
     mesh.DeepCopy(decimatFilter.GetOutput())
     return mesh
 
 
-def vtkSmoothMesh(mesh, Iterations):
+def vtkSmoothMesh(q, mesh, Iterations, step, start, finish):
+    """Smooth a mesh using VTK's vtkSmoothPolyData filter."""
+
+    def VTK_Terminal_progress(caller, event):
+        ProgRatio = round(float(caller.GetProgress()), 2)
+        q.put(
+            [
+                "loop",
+                f"PROGRESS : {step}...",
+                "",
+                start,
+                finish,
+                ProgRatio,
+            ]
+        )
+
     SmoothFilter = vtk.vtkSmoothPolyDataFilter()
     SmoothFilter.SetInputData(mesh)
     SmoothFilter.SetNumberOfIterations(int(Iterations))
     SmoothFilter.SetFeatureAngle(45)
     SmoothFilter.SetRelaxationFactor(0.05)
+    SmoothFilter.AddObserver(ProgEvent, VTK_Terminal_progress)
     SmoothFilter.Update()
     mesh.DeepCopy(SmoothFilter.GetOutput())
     return mesh
@@ -1000,3 +1165,116 @@ def vtkContourFilter(vtkImage, isovalue=0.0):
     mesh = vtk.vtkPolyData()
     mesh.DeepCopy(ContourFilter.GetOutput())
     return mesh
+
+
+def CV2_progress_bar(q, iter=100):
+    while True:
+        if not q.empty():
+            signal = q.get()
+
+            if "End" in signal[0]:
+                pourcentage = 100
+                Uptxt = "Finished."
+                progress_bar(pourcentage, Uptxt)
+                break
+            if "GuessTime" in signal[0]:
+                _, Uptxt, Lowtxt, start, finish, periode = signal
+                for i in range(iter):
+
+                    if q.empty():
+
+                        ratio = start + (((i + 1) / iter) * (finish - start))
+                        pourcentage = int(ratio * 100)
+                        progress_bar(pourcentage, Uptxt)
+                        sleep(periode / iter)
+                    else:
+                        break
+
+            if "loop" in signal[0]:
+                _, Uptxt, Lowtxt, start, finish, progFloat = signal
+                ratio = start + (progFloat * (finish - start))
+                pourcentage = int(ratio * 100)
+                progress_bar(pourcentage, Uptxt)
+
+        else:
+            time.sleep(0.1)
+
+
+def progress_bar(pourcentage, Uptxt, Lowtxt="", Title="BDENATAL", Delay=1):
+
+    X, Y = WindowWidth, WindowHeight = (500, 100)
+    BackGround = np.ones((Y, X, 3), dtype=np.uint8) * 255
+    # Progress bar Parameters :
+    maxFill = X - 70
+    minFill = 40
+    barColor = (50, 200, 0)
+    BarHeight = 20
+    barUp = Y - 60
+    barBottom = barUp + BarHeight
+    # Text :
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fontScale = 0.5
+    fontThikness = 1
+    fontColor = (0, 0, 0)
+    lineStyle = cv2.LINE_AA
+
+    chunk = (maxFill - 40) / 100
+
+    img = BackGround.copy()
+    fill = minFill + int(pourcentage * chunk)
+    img[barUp:barBottom, minFill:fill] = barColor
+
+    img = cv2.putText(
+        img,
+        f"{pourcentage}%",
+        (maxFill + 10, barBottom - 8),
+        # (fill + 10, barBottom - 10),
+        font,
+        fontScale,
+        fontColor,
+        fontThikness,
+        lineStyle,
+    )
+
+    img = cv2.putText(
+        img,
+        Uptxt,
+        (minFill, barUp - 10),
+        font,
+        fontScale,
+        fontColor,
+        fontThikness,
+        lineStyle,
+    )
+    cv2.imshow(Title, img)
+
+    cv2.waitKey(Delay)
+
+    if pourcentage == 100:
+        img = BackGround.copy()
+        img[barUp:barBottom, minFill:maxFill] = (50, 200, 0)
+        img = cv2.putText(
+            img,
+            "100%",
+            (maxFill + 10, barBottom - 8),
+            font,
+            fontScale,
+            fontColor,
+            fontThikness,
+            lineStyle,
+        )
+
+        img = cv2.putText(
+            img,
+            Uptxt,
+            (minFill, barUp - 10),
+            font,
+            fontScale,
+            fontColor,
+            fontThikness,
+            lineStyle,
+        )
+        cv2.imshow(Title, img)
+        cv2.waitKey(Delay)
+        time.sleep(4)
+        cv2.destroyAllWindows()
