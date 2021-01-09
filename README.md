@@ -7,7 +7,6 @@
 #Requirements : (SimpleITK, opencv-python).
 #This packages will be automatically installed at Blender Add-on registration step.
 #Ensure you have good internet connecxion before Add-on install.
-#Activate import image to plane built-in Blender Add-on.
 #Recommanded Blender version :2.91
 #Follow install Video Demo bellow.
 
