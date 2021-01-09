@@ -1,6 +1,6 @@
-# BDENTAL SCAN VIEWER
+# BDENTAL 
 
-#BDENTAL-SCAN-VIEWER is a Blender add-on for CT Scan and specialy dental CBCT vizualisation.
+#BDENTAL is a Blender add-on for CT Scan and specialy dental CBCT vizualisation.
 #It is first part of an Dental Implant planing add-on.
 
 #Install Instructions.
