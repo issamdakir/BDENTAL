@@ -225,7 +225,7 @@ class BDENTAL_PT_AlignPanel(bpy.types.Panel):
     bl_region_type = "UI"  # blender 2.7 and lower = TOOLS
     bl_category = "BDENT"
     bl_label = "BDENTAL ALIGN TOOLS :"
-    # bl_options = {"DEFAULT_CLOSED"}
+    bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
         BDENTAL_Props = context.scene.BDENTAL_Props

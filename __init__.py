@@ -22,10 +22,10 @@
 # ##### END GPL LICENSE BLOCK #####
 ##############################################################################################
 bl_info = {
-    "name": "BDENTAL SCAN VIEWER",  ###################Addon name
+    "name": "BDENTAL",  ###################Addon name
     "author": "Essaid Issam Dakir DMD",
     "version": (1, 0, 0),
-    "blender": (2, 80, 0),  ################# Blender working version
+    "blender": (2, 90, 1),  ################# Blender working version
     "location": "3D View -> UI SIDE PANEL ",
     "description": "3D Tools suite for Digital Dentistry",  ########### Addon description
     "warning": "",
@@ -150,50 +150,53 @@ if NotFoundPkgs == []:
         register()
 
 else:
-    for pkg in NotFoundPkgs:
-        print(f"{pkg} : not installed")
-    ######################################################################################
-    if isConnected():
-        BlenderRequirementsPipInstall(path=requirements_path, modules=NotFoundPkgs)
-        # Addon modules imports :
-        from . import BDENTAL_Props, BDENTAL_Panel
-        from .Operators import BDENTAL_ScanOperators, AlignOperators
+    if sys.platform == "win32":
+        for pkg in NotFoundPkgs:
+            print(f"{pkg} : not installed")
+        ######################################################################################
+        if isConnected():
+            BlenderRequirementsPipInstall(path=requirements_path, modules=NotFoundPkgs)
+            # Addon modules imports :
+            from . import BDENTAL_Props, BDENTAL_Panel
+            from .Operators import BDENTAL_ScanOperators, AlignOperators
 
-        addon_modules = [
-            BDENTAL_Props,
-            BDENTAL_Panel,
-            BDENTAL_ScanOperators,
-            AlignOperators,
-        ]
-        init_classes = []
+            addon_modules = [
+                BDENTAL_Props,
+                BDENTAL_Panel,
+                BDENTAL_ScanOperators,
+                AlignOperators,
+            ]
+            init_classes = []
 
-        ############################################################################################
-        # Registration :
-        ############################################################################################
-        def register():
-            for module in addon_modules:
-                module.register()
-            for cl in init_classes:
-                bpy.utils.register_class(cl)
+            ############################################################################################
+            # Registration :
+            ############################################################################################
+            def register():
+                for module in addon_modules:
+                    module.register()
+                for cl in init_classes:
+                    bpy.utils.register_class(cl)
 
-        def unregister():
-            for cl in init_classes:
-                bpy.utils.unregister_class(cl)
-            for module in reversed(addon_modules):
-                module.unregister()
+            def unregister():
+                for cl in init_classes:
+                    bpy.utils.unregister_class(cl)
+                for module in reversed(addon_modules):
+                    module.unregister()
 
-        if __name__ == "__main__":
-            register()
+            if __name__ == "__main__":
+                register()
 
+        else:
+
+            def register():
+
+                message = "Please Check Internet Connexion and restart Blender! "
+                print(message)
+
+            def unregister():
+                pass
+
+            if __name__ == "__main__":
+                register()
     else:
-
-        def register():
-
-            message = "Please Check Internet Connexion and restart Blender! "
-            print(message)
-
-        def unregister():
-            pass
-
-        if __name__ == "__main__":
-            register()
+        print("BDENTAL: Only WINDOWS palteforms are supported for the moment!")
