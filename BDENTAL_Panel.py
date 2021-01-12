@@ -234,9 +234,9 @@ class BDENTAL_PT_AlignPanel(bpy.types.Panel):
         row = layout.row()
         row.operator("bdental.alignpoints")
         row.operator("bdental.alignpointsinfo", text="", icon="INFO")
-        row = layout.row()
-        row.operator("bdental.alignicp")
 
+        # conditions :
+        ###################################
         if not bpy.context.selected_objects:
             self.AlignLabels = "NOTREADY"
             BaseObjectLabel = " Empty !"
@@ -265,25 +265,30 @@ class BDENTAL_PT_AlignPanel(bpy.types.Panel):
             AlignObjectLabel = f" {AlignObject.name}"
             AlignObjectIcon = orange_icon
 
-        Condition_1 = len(bpy.context.selected_objects) > 2
+        Condition_1 = len(bpy.context.selected_objects) != 2
         Condition_2 = bpy.context.selected_objects and not bpy.context.active_object
         Condition_3 = bpy.context.selected_objects and not (
             bpy.context.active_object in bpy.context.selected_objects
         )
+        Condition_4 = not bpy.context.active_object in bpy.context.visible_objects
 
-        if Condition_1 or Condition_2 or Condition_3:
+        if Condition_1 or Condition_2 or Condition_3 or Condition_4:
             self.AlignLabels = "INVALID"
         if AlignModalState:
             self.AlignLabels = "MODAL"
+
+        #########################################
 
         if self.AlignLabels == "GOOD":
 
             box = layout.box()
 
             row = box.row()
-            row.label(text=f"BASE object  :{BaseObjectLabel}", icon=BaseObjectIcon)
+            row.label(text=f"BASE object  :{BaseObjectLabel}")  # , icon=BaseObjectIcon
             row = box.row()
-            row.label(text=f"ALIGN object :{AlignObjectLabel}", icon=AlignObjectIcon)
+            row.label(
+                text=f"ALIGN object :{AlignObjectLabel}"
+            )  # , icon=AlignObjectIcon
             row = box.row()
             row.alert = True
             row.label(text="READY FOR ALIGNEMENT.")
@@ -292,25 +297,28 @@ class BDENTAL_PT_AlignPanel(bpy.types.Panel):
 
             box = layout.box()
 
-            row = box.row()
-            row.label(text=f"BASE object  :{BaseObjectLabel}", icon=BaseObjectIcon)
-            row = box.row()
-            row.label(text=f"ALIGN object :{AlignObjectLabel}", icon=AlignObjectIcon)
+            # row = box.row()
+            # row.label(text=f"BASE object  :{BaseObjectLabel}", icon=BaseObjectIcon)
+            # row = box.row()
+            # row.label(text=f"ALIGN object :{AlignObjectLabel}", icon=AlignObjectIcon)
             row = box.row()
             row.alert = True
             row.label(text="NOT READY!")
 
         if self.AlignLabels == "INVALID":
             box = layout.box()
-            box.alert = True
             row = box.row()
+            row.alert = True
             row.label(text="Invalid objects selection, check info !", icon="ERROR")
 
         if self.AlignLabels == "MODAL":
             box = layout.box()
-            box.alert = True
             row = box.row()
+            row.alert = True
             row.label(text="WAITING FOR ALIGNEMENT...!")
+
+        row = layout.row()
+        row.operator("bdental.alignicp")
         # if self.AlignLabels == "GOOD":
         #     row = layout.row()
         #     row.operator("bdental.alignpoints")

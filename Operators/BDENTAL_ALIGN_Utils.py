@@ -75,9 +75,9 @@ def AddRefPoint(name, color, CollName=None):
     if CollName:
         MoveToCollection(RefP, CollName)
     if name.startswith("B"):
-        matName = "BaseRefMat"
+        matName = "TargetRefMat"
     if name.startswith("M"):
-        matName = "AlignRefMat"
+        matName = "SourceRefMat"
 
     mat = bpy.data.materials.get(matName) or bpy.data.materials.new(matName)
     mat.diffuse_color = color
@@ -87,37 +87,43 @@ def AddRefPoint(name, color, CollName=None):
     return RefP
 
 
-def RefPointsToTransformMatrix(BaseRefPoints, AlignRefPoints):
+def RefPointsToTransformMatrix(TargetRefPoints, SourceRefPoints):
     # TransformMatrix = Matrix()  # identity Matrix (4x4)
 
     # make 2 arrays of coordinates :
-    BaseArray = np.array([obj.location for obj in BaseRefPoints], dtype=np.float64).T
-    AlignArray = np.array([obj.location for obj in AlignRefPoints], dtype=np.float64).T
+    TargetArray = np.array(
+        [obj.location for obj in TargetRefPoints], dtype=np.float64
+    ).T
+    SourceArray = np.array(
+        [obj.location for obj in SourceRefPoints], dtype=np.float64
+    ).T
 
-    # Calculate centers of Base and Align RefPoints :
-    BaseCenter, AlignCenter = np.mean(BaseArray, axis=1), np.mean(AlignArray, axis=1)
+    # Calculate centers of Target and Source RefPoints :
+    TargetCenter, SourceCenter = np.mean(TargetArray, axis=1), np.mean(
+        SourceArray, axis=1
+    )
 
     # Calculate Translation :
     ###################################
 
-    # TransMatrix_1 : Matrix(4x4) will translate center of AlignRefPoints...
+    # TransMatrix_1 : Matrix(4x4) will translate center of SourceRefPoints...
     # to origine (0,0,0) location.
-    TransMatrix_1 = Matrix.Translation(Vector(-AlignCenter))
+    TransMatrix_1 = Matrix.Translation(Vector(-SourceCenter))
 
-    # TransMatrix_2 : Matrix(4x4) will translate center of AlignRefPoints...
-    #  to the center of BaseRefPoints location.
-    TransMatrix_2 = Matrix.Translation(Vector(BaseCenter))
+    # TransMatrix_2 : Matrix(4x4) will translate center of SourceRefPoints...
+    #  to the center of TargetRefPoints location.
+    TransMatrix_2 = Matrix.Translation(Vector(TargetCenter))
 
     # Calculate Rotation :
     ###################################
 
-    # Home Arrays will get the Centered Base and Align RefPoints around origin (0,0,0).
-    HomeBaseArray, HomeAlignArray = (
-        BaseArray - BaseCenter.reshape(3, 1),
-        AlignArray - AlignCenter.reshape(3, 1),
+    # Home Arrays will get the Centered Target and Source RefPoints around origin (0,0,0).
+    HomeTargetArray, HomeSourceArray = (
+        TargetArray - TargetCenter.reshape(3, 1),
+        SourceArray - SourceCenter.reshape(3, 1),
     )
     # Rigid transformation via SVD of covariance matrix :
-    U, S, Vt = np.linalg.svd(np.dot(HomeBaseArray, HomeAlignArray.T))
+    U, S, Vt = np.linalg.svd(np.dot(HomeTargetArray, HomeSourceArray.T))
 
     # rotation matrix from SVD orthonormal bases :
     R = np.dot(U, Vt)
@@ -604,8 +610,8 @@ def VcoListToVtkPolyData(VcoList):
 
 def KdIcpPairs(SourceVcoList, TargetVcolist, VertsLimite=5000):
     start = Tcounter()
-    print("KD processing start...")
-    SourceKdList, TargetKdList, IndexList = [], [], []
+    # print("KD processing start...")
+    SourceKdList, TargetKdList, IndexList, DistList = [], [], [], []
     size = len(TargetVcolist)
     kd = kdtree.KDTree(size)
 
@@ -627,17 +633,32 @@ def KdIcpPairs(SourceVcoList, TargetVcolist, VertsLimite=5000):
                 IndexList.append(index)
                 TargetKdList.append(Tco)
                 SourceKdList.append(Sco)
+                DistList.append(dist)
     finish = Tcounter()
-    print(f"KD total iterations : {len(SourceVcoList)}")
-    print(f"KD Index List : {len(IndexList)}")
+    # print(f"KD total iterations : {len(SourceVcoList)}")
+    # print(f"KD Index List : {len(IndexList)}")
 
-    print(f"KD finshed in {finish-start} secondes")
-    return SourceKdList, TargetKdList
+    # print(f"KD finshed in {finish-start} secondes")
+    return SourceKdList, TargetKdList, DistList
 
 
-def ObjectToIcpVcoList(obj, VG=False):
-    if VG == True:
-        ICP_VGroup = obj.vertex_groups.get("ICP")
+def ObjectToIcpVcoList(obj, VG):
+    IcpVidDict = VG
+    if IcpVidDict:
+
+        SourceVidList, TargetVidList = (
+            IcpVidDict[SourceObj],
+            IcpVidDict[TargetObj],
+        )
+        SourceVcoList = [
+            SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+            for idx in SourceVidList
+        ]
+        TargetVcoList = [
+            TargetObj.matrix_world @ TargetObj.data.vertices[idx].co
+            for idx in TargetVidList
+        ]
+        ICP_VGroup = obj.vertex_groups.get("BDENTAL_ICP_VG")
         if ICP_VGroup:
             obj.vertex_groups.active = ICP_VGroup
             bpy.ops.object.select_all(action="DESELECT")
@@ -661,6 +682,130 @@ def ObjectToIcpVcoList(obj, VG=False):
     # bpy.ops.object.select_all(action="DESELECT")
 
     return VertsCoList
+
+
+def KdRadiusVerts(obj, RefCo, radius):
+    # start = Tcounter()
+    # print("KD processing start...")
+    RadiusVertsIds = []
+    RadiusVertsCo = []
+    RadiusVertsDistance = []
+    verts = obj.data.vertices
+    Vcolist = [obj.matrix_world @ v.co for v in verts]
+    size = len(Vcolist)
+    kd = kdtree.KDTree(size)
+
+    for i, Vco in enumerate(Vcolist):
+        kd.insert(Vco, i)
+
+    kd.balance()
+
+    for (co, index, dist) in kd.find_range(RefCo, radius):
+
+        RadiusVertsIds.append(index)
+        RadiusVertsCo.append(co)
+        RadiusVertsDistance.append(dist)
+
+    # finish = Tcounter()
+    # print(f"KD radius finshed in {finish-start} secondes")
+    return RadiusVertsIds, RadiusVertsCo, RadiusVertsDistance
+
+
+def VidDictFromPoints(TargetRefPoints, SourceRefPoints, TargetObj, SourceObj, radius):
+    IcpVidDict = {TargetObj: [], SourceObj: []}
+
+    for obj in [TargetObj, SourceObj]:
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="DESELECT")
+        bpy.ops.object.mode_set(mode="OBJECT")
+        if obj == TargetObj:
+            for RefTargetP in TargetRefPoints:
+                RefCo = RefTargetP.location
+                RadiusVertsIds, RadiusVertsCo, RadiusVertsDistance = KdRadiusVerts(
+                    TargetObj, RefCo, radius
+                )
+                IcpVidDict[TargetObj].extend(RadiusVertsIds)
+                for idx in RadiusVertsIds:
+                    obj.data.vertices[idx].select = True
+
+        if obj == SourceObj:
+            for RefSourceP in SourceRefPoints:
+                RefCo = RefSourceP.location
+                RadiusVertsIds, RadiusVertsCo, RadiusVertsDistance = KdRadiusVerts(
+                    SourceObj, RefCo, radius
+                )
+                IcpVidDict[SourceObj].extend(RadiusVertsIds)
+                for idx in RadiusVertsIds:
+                    obj.data.vertices[idx].select = True
+
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+        ICP_VGroup = obj.vertex_groups.new(name="BDENTAL_ICP_VG")
+        obj.vertex_groups.active = ICP_VGroup
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.object.vertex_group_assign()
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+
+    for obj in [TargetObj, SourceObj]:
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = TargetObj
+
+    return IcpVidDict
+
+
+def KdIcpPairsToTransformMatrix(
+    TargetKdList, SourceKdList
+):  # SourceKdList, TargetKdList
+    # TransformMatrix = Matrix()  # identity Matrix (4x4)
+
+    # make 2 arrays of coordinates :
+    TargetArray = np.array(TargetKdList, dtype=np.float64).T
+    SourceArray = np.array(SourceKdList, dtype=np.float64).T
+
+    # Calculate centers of Target and Source RefPoints :
+    TargetCenter, SourceCenter = np.mean(TargetArray, axis=1), np.mean(
+        SourceArray, axis=1
+    )
+
+    # Calculate Translation :
+    ###################################
+
+    # TransMatrix_1 : Matrix(4x4) will translate center of SourceRefPoints...
+    # to origine (0,0,0) location.
+    TransMatrix_1 = Matrix.Translation(Vector(-SourceCenter))
+
+    # TransMatrix_2 : Matrix(4x4) will translate center of SourceRefPoints...
+    #  to the center of TargetRefPoints location.
+    TransMatrix_2 = Matrix.Translation(Vector(TargetCenter))
+
+    # Calculate Rotation :
+    ###################################
+
+    # Home Arrays will get the Centered Target and Source RefPoints around origin (0,0,0).
+    HomeTargetArray, HomeSourceArray = (
+        TargetArray - TargetCenter.reshape(3, 1),
+        SourceArray - SourceCenter.reshape(3, 1),
+    )
+    # Rigid transformation via SVD of covariance matrix :
+    U, S, Vt = np.linalg.svd(np.dot(HomeTargetArray, HomeSourceArray.T))
+
+    # rotation matrix from SVD orthonormal bases :
+    R = np.dot(U, Vt)
+    if np.linalg.det(R) < 0.0:
+        Vt[2, :] *= -1
+        R = np.dot(U, Vt)
+        print(" Reflection fixed ")
+
+    RotationMatrix = Matrix(R).to_4x4()
+    TransformMatrix = TransMatrix_2 @ RotationMatrix @ TransMatrix_1
+
+    return TransformMatrix
 
 
 # # TODO= fix loop iterations ...!

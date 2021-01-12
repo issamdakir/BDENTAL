@@ -84,6 +84,14 @@ class BDENTAL_Props(bpy.types.PropertyGroup):
         default="",
         description="Nrrd image3D file Path",
     )
+
+    #######################
+
+    IcpVidDict: StringProperty(
+        name="IcpVidDict",
+        default="None",
+        description="ICP Vertices Pairs str(Dict)",
+    )
     #######################
 
     Wmin: IntProperty()

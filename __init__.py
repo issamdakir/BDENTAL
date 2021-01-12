@@ -39,19 +39,21 @@ bl_info = {
 # Python imports :
 import sys, os, bpy, subprocess, socket, time, addon_utils, platform
 from importlib import import_module
+from os.path import dirname, join, realpath, abspath
 
+ADDON_DIR = dirname(abspath(__file__))
 # activate unicode characters in windows CLI :
-if platform.system() == "Windows":
+if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="cp65001")
+    REQ_DIR = join(ADDON_DIR, "Resources\\Requirements")
     # cmd = "chcp 65001"  # "& set PYTHONIOENCODING=utf-8"
     # subprocess.call(cmd, shell=True)
+if sys.platform == "darwin":
+    REQ_DIR = join(ADDON_DIR, "Resources/Requirements")
 
 #############################################################
-# Add sys Paths : Addon directory and requirements directory
-addon_dir = os.path.dirname(os.path.abspath(__file__))
-requirements_path = os.path.join(addon_dir, "Resources\\Requirements")
 
-sysPaths = [addon_dir, requirements_path]
+sysPaths = [ADDON_DIR, REQ_DIR]
 
 for path in sysPaths:
     if not path in sys.path:
@@ -78,20 +80,19 @@ def isConnected():
 
 def BlenderRequirementsPipInstall(path, modules):
     # Download and install requirement if not AddonPacked version:
-    Blender_python_path = os.path.join(sys.base_exec_prefix, "bin")
-    site_packages = os.path.join(Blender_python_path, "lib\\site-packages\\*.*")
+    Blender_python_path = sys.executable
     subprocess.call(
-        f"cd {Blender_python_path} && python -m ensurepip ",
+        f"{sys.executable} -m ensurepip ",
         shell=True,
     )
     subprocess.call(
-        f"cd {Blender_python_path} && python -m pip install -U pip ",
+        f"{sys.executable} -m pip install -U pip ",
         shell=True,
     )
     print("Blender pip upgraded")
 
     for module in modules:
-        command = f'cd "{Blender_python_path}" && python -m pip install {module} --target "{path}"'
+        command = f'{sys.executable} -m pip install {module} --target "{path}"'
         subprocess.call(command, shell=True)
         print(f"{module}Downloaded and installed")
 
@@ -104,9 +105,9 @@ def BlenderRequirementsPipInstall(path, modules):
 ##########################################################################
 
 # if (
-#     "cv2" in os.listdir(requirements_path)
-#     and "SimpleITK" in os.listdir(requirements_path)
-#     and "vtk.py" in os.listdir(requirements_path)
+#     "cv2" in os.listdir(REQ_DIR)
+#     and "SimpleITK" in os.listdir(REQ_DIR)
+#     and "vtk.py" in os.listdir(REQ_DIR)
 # ):
 NotFoundPkgs = []
 for mod, pkg in Requirements.items():
@@ -150,53 +151,51 @@ if NotFoundPkgs == []:
         register()
 
 else:
-    if sys.platform == "win32":
-        for pkg in NotFoundPkgs:
-            print(f"{pkg} : not installed")
-        ######################################################################################
-        if isConnected():
-            BlenderRequirementsPipInstall(path=requirements_path, modules=NotFoundPkgs)
-            # Addon modules imports :
-            from . import BDENTAL_Props, BDENTAL_Panel
-            from .Operators import BDENTAL_ScanOperators, AlignOperators
 
-            addon_modules = [
-                BDENTAL_Props,
-                BDENTAL_Panel,
-                BDENTAL_ScanOperators,
-                AlignOperators,
-            ]
-            init_classes = []
+    for pkg in NotFoundPkgs:
+        print(f"{pkg} : not installed")
+    ######################################################################################
+    if isConnected():
+        BlenderRequirementsPipInstall(path=REQ_DIR, modules=NotFoundPkgs)
+        # Addon modules imports :
+        from . import BDENTAL_Props, BDENTAL_Panel
+        from .Operators import BDENTAL_ScanOperators, AlignOperators
 
-            ############################################################################################
-            # Registration :
-            ############################################################################################
-            def register():
-                for module in addon_modules:
-                    module.register()
-                for cl in init_classes:
-                    bpy.utils.register_class(cl)
+        addon_modules = [
+            BDENTAL_Props,
+            BDENTAL_Panel,
+            BDENTAL_ScanOperators,
+            AlignOperators,
+        ]
+        init_classes = []
 
-            def unregister():
-                for cl in init_classes:
-                    bpy.utils.unregister_class(cl)
-                for module in reversed(addon_modules):
-                    module.unregister()
+        ############################################################################################
+        # Registration :
+        ############################################################################################
+        def register():
+            for module in addon_modules:
+                module.register()
+            for cl in init_classes:
+                bpy.utils.register_class(cl)
 
-            if __name__ == "__main__":
-                register()
+        def unregister():
+            for cl in init_classes:
+                bpy.utils.unregister_class(cl)
+            for module in reversed(addon_modules):
+                module.unregister()
 
-        else:
+        if __name__ == "__main__":
+            register()
 
-            def register():
-
-                message = "Please Check Internet Connexion and restart Blender! "
-                print(message)
-
-            def unregister():
-                pass
-
-            if __name__ == "__main__":
-                register()
     else:
-        print("BDENTAL: Only WINDOWS palteforms are supported for the moment!")
+
+        def register():
+
+            message = "Please Check Internet Connexion and restart Blender! "
+            print(message)
+
+        def unregister():
+            pass
+
+        if __name__ == "__main__":
+            register()

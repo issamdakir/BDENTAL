@@ -69,9 +69,9 @@ def AddRefPoint(name, color, CollName=None):
     if CollName:
         MoveToCollection(RefP, CollName)
     if name.startswith("B"):
-        matName = "BaseRefMat"
+        matName = "TargetRefMat"
     if name.startswith("M"):
-        matName = "AlignRefMat"
+        matName = "SourceRefMat"
 
     mat = bpy.data.materials.get(matName) or bpy.data.materials.new(matName)
     mat.diffuse_color = color
@@ -81,37 +81,43 @@ def AddRefPoint(name, color, CollName=None):
     return RefP
 
 
-def RefPointsToTransformMatrix(BaseRefPoints, AlignRefPoints):
+def RefPointsToTransformMatrix(TargetRefPoints, SourceRefPoints):
     # TransformMatrix = Matrix()  # identity Matrix (4x4)
 
     # make 2 arrays of coordinates :
-    BaseArray = np.array([obj.location for obj in BaseRefPoints], dtype=np.float64).T
-    AlignArray = np.array([obj.location for obj in AlignRefPoints], dtype=np.float64).T
+    TargetArray = np.array(
+        [obj.location for obj in TargetRefPoints], dtype=np.float64
+    ).T
+    SourceArray = np.array(
+        [obj.location for obj in SourceRefPoints], dtype=np.float64
+    ).T
 
-    # Calculate centers of Base and Align RefPoints :
-    BaseCenter, AlignCenter = np.mean(BaseArray, axis=1), np.mean(AlignArray, axis=1)
+    # Calculate centers of Target and Source RefPoints :
+    TargetCenter, SourceCenter = np.mean(TargetArray, axis=1), np.mean(
+        SourceArray, axis=1
+    )
 
     # Calculate Translation :
     ###################################
 
-    # TransMatrix_1 : Matrix(4x4) will translate center of AlignRefPoints...
+    # TransMatrix_1 : Matrix(4x4) will translate center of SourceRefPoints...
     # to origine (0,0,0) location.
-    TransMatrix_1 = Matrix.Translation(Vector(-AlignCenter))
+    TransMatrix_1 = Matrix.Translation(Vector(-SourceCenter))
 
-    # TransMatrix_2 : Matrix(4x4) will translate center of AlignRefPoints...
-    #  to the center of BaseRefPoints location.
-    TransMatrix_2 = Matrix.Translation(Vector(BaseCenter))
+    # TransMatrix_2 : Matrix(4x4) will translate center of SourceRefPoints...
+    #  to the center of TargetRefPoints location.
+    TransMatrix_2 = Matrix.Translation(Vector(TargetCenter))
 
     # Calculate Rotation :
     ###################################
 
-    # Home Arrays will get the Centered Base and Align RefPoints around origin (0,0,0).
-    HomeBaseArray, HomeAlignArray = (
-        BaseArray - BaseCenter.reshape(3, 1),
-        AlignArray - AlignCenter.reshape(3, 1),
+    # Home Arrays will get the Centered Target and Source RefPoints around origin (0,0,0).
+    HomeTargetArray, HomeSourceArray = (
+        TargetArray - TargetCenter.reshape(3, 1),
+        SourceArray - SourceCenter.reshape(3, 1),
     )
     # Rigid transformation via SVD of covariance matrix :
-    U, S, Vt = np.linalg.svd(np.dot(HomeBaseArray, HomeAlignArray.T))
+    U, S, Vt = np.linalg.svd(np.dot(HomeTargetArray, HomeSourceArray.T))
 
     # rotation matrix from SVD orthonormal bases :
     R = np.dot(U, Vt)
@@ -134,18 +140,18 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
     bl_label = "ALIGN POINTS"
     bl_options = {"REGISTER", "UNDO"}
 
-    BaseColor = (1, 0, 0, 1)  # red
-    AlignColor = (0, 0, 1, 1)  # blue
+    TargetColor = (1, 0, 0, 1)  # red
+    SourceColor = (0, 0, 1, 1)  # blue
     CollName = "ALIGN POINTS"
-    BaseChar = "B"
-    AlignChar = "A"
+    TargetChar = "B"
+    SourceChar = "A"
 
     def modal(self, context, event):
 
         ############################################
         if not event.type in {
-            self.BaseChar,
-            self.AlignChar,
+            self.TargetChar,
+            self.SourceChar,
             "DEL",
             "RET",
             "ESC",
@@ -154,28 +160,28 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
 
             return {"PASS_THROUGH"}
         #########################################
-        if event.type == self.BaseChar:
-            # Add Base Refference point :
+        if event.type == self.TargetChar:
+            # Add Target Refference point :
             if event.value == ("PRESS"):
-                color = self.BaseColor
+                color = self.TargetColor
                 CollName = self.CollName
-                self.BaseCounter += 1
-                name = f"B{self.BaseCounter}"
+                self.TargetCounter += 1
+                name = f"B{self.TargetCounter}"
                 RefP = AddRefPoint(name, color, CollName)
-                self.BaseRefPoints.append(RefP)
+                self.TargetRefPoints.append(RefP)
                 self.TotalRefPoints.append(RefP)
                 bpy.ops.object.select_all(action="DESELECT")
 
         #########################################
-        if event.type == self.AlignChar:
-            # Add Base Refference point :
+        if event.type == self.SourceChar:
+            # Add Source Refference point :
             if event.value == ("PRESS"):
-                color = self.AlignColor
+                color = self.SourceColor
                 CollName = self.CollName
-                self.AlignCounter += 1
-                name = f"M{self.AlignCounter}"
+                self.SourceCounter += 1
+                name = f"M{self.SourceCounter}"
                 RefP = AddRefPoint(name, color, CollName)
-                self.AlignRefPoints.append(RefP)
+                self.SourceRefPoints.append(RefP)
                 self.TotalRefPoints.append(RefP)
                 bpy.ops.object.select_all(action="DESELECT")
 
@@ -186,11 +192,11 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
                     obj = self.TotalRefPoints.pop()
                     name = obj.name
                     if name.startswith("B"):
-                        self.BaseCounter -= 1
-                        self.BaseRefPoints.pop()
+                        self.TargetCounter -= 1
+                        self.TargetRefPoints.pop()
                     if name.startswith("M"):
-                        self.AlignCounter -= 1
-                        self.AlignRefPoints.pop()
+                        self.SourceCounter -= 1
+                        self.SourceRefPoints.pop()
                     bpy.data.objects.remove(obj)
                     bpy.ops.object.select_all(action="DESELECT")
 
@@ -199,10 +205,15 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
 
             if event.value == ("PRESS"):
 
+                start = Tcounter()
+
+                TargetObj = self.TargetObject
+                SourceObj = self.SourceObject
+
                 #############################################
                 condition = (
-                    len(self.BaseRefPoints) == len(self.AlignRefPoints)
-                    and len(self.BaseRefPoints) >= 3
+                    len(self.TargetRefPoints) == len(self.SourceRefPoints)
+                    and len(self.TargetRefPoints) >= 3
                 )
                 if not condition:
                     message = [
@@ -218,12 +229,89 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
 
                 else:
                     TransformMatrix = RefPointsToTransformMatrix(
-                        self.BaseRefPoints, self.AlignRefPoints
+                        self.TargetRefPoints, self.SourceRefPoints
                     )
 
-                    self.AlignObject.matrix_world = (
-                        TransformMatrix @ self.AlignObject.matrix_world
+                    SourceObj.matrix_world = TransformMatrix @ SourceObj.matrix_world
+                    for SourceRefP in self.SourceRefPoints:
+                        SourceRefP.matrix_world = (
+                            TransformMatrix @ SourceRefP.matrix_world
+                        )
+
+                    # Update scene :
+                    context.view_layer.update()
+                    for obj in [TargetObj, SourceObj]:
+                        obj.select_set(True)
+                        bpy.context.view_layer.objects.active = TargetObj
+                        obj.update_tag()
+
+                    # ICP alignement :
+                    print("ICP Align processing...")
+                    IcpVidDict = VidDictFromPoints(
+                        TargetRefPoints=self.TargetRefPoints,
+                        SourceRefPoints=self.SourceRefPoints,
+                        TargetObj=TargetObj,
+                        SourceObj=SourceObj,
+                        radius=3,
                     )
+                    BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+                    BDENTAL_Props.IcpVidDict = str(IcpVidDict)
+
+                    SourceVidList, TargetVidList = (
+                        IcpVidDict[SourceObj],
+                        IcpVidDict[TargetObj],
+                    )
+
+                    for _ in range(30):
+                        SourceVcoList = [
+                            SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+                            for idx in SourceVidList
+                        ]
+                        TargetVcoList = [
+                            TargetObj.matrix_world @ TargetObj.data.vertices[idx].co
+                            for idx in TargetVidList
+                        ]
+                        SourceKdList, TargetKdList, DistList = KdIcpPairs(
+                            SourceVcoList, TargetVcoList, VertsLimite=10000
+                        )
+                        TransformMatrix = KdIcpPairsToTransformMatrix(
+                            TargetKdList=TargetKdList, SourceKdList=SourceKdList
+                        )
+                        SourceObj.matrix_world = (
+                            TransformMatrix @ SourceObj.matrix_world
+                        )
+                        # Update scene :
+                        SourceObj.update_tag()
+                        context.view_layer.update()
+
+                        SourceObj = self.SourceObject
+                        SourceVcoList = [
+                            SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+                            for idx in SourceVidList
+                        ]
+                        SourceKdList, TargetKdList, DistList = KdIcpPairs(
+                            SourceVcoList, TargetVcoList, VertsLimite=10000
+                        )
+                        MaxDist = max(DistList)
+                        print("Max distance = ", MaxDist)
+                        if MaxDist < 0.0001:
+                            break
+
+                    # TransformMatrix = VtkICPTransform(
+                    #     SourceVcoList=SourceVcoList,
+                    #     TargetVcoList=TargetVcoList,
+                    #     iterations=30,
+                    #     Precision=0.0000001,
+                    # )
+
+                    # SourceObj.matrix_world = TransformMatrix @ SourceObj.matrix_world
+                    # Update scene :
+                    # context.view_layer.update()
+                    # for obj in [TargetObj, SourceObj]:
+                    #     obj.select_set(True)
+                    #     bpy.context.view_layer.objects.active = TargetObj
+                    #     obj.update_tag()
+
                     for obj in self.TotalRefPoints:
                         bpy.data.objects.remove(obj)
 
@@ -253,10 +341,18 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
                     bpy.context.space_data.shading.background_type = (
                         self.background_type
                     )
-                    print(self.background_type, self.background_color)
+
                     BDENTAL_Props = context.scene.BDENTAL_Props
                     BDENTAL_Props.AlignModalState = False
                     bpy.context.scene.cursor.location = (0, 0, 0)
+
+                    for obj in [TargetObj, SourceObj]:
+                        obj.select_set(True)
+                        bpy.context.view_layer.objects.active = TargetObj
+
+                    finish = Tcounter()
+                    print(f"Alignement finshed in {finish-start} secondes")
+
                     return {"FINISHED"}
 
         ###########################################
@@ -329,19 +425,19 @@ class BDENTAL_OT_AlignPoints(bpy.types.Operator):
 
                 # Prepare scene  :
 
-                self.BaseObject = bpy.context.active_object
-                self.AlignObject = [
+                self.TargetObject = bpy.context.active_object
+                self.SourceObject = [
                     obj
                     for obj in bpy.context.selected_objects
-                    if not obj is self.BaseObject
+                    if not obj is self.TargetObject
                 ][0]
 
-                self.BaseRefPoints = []
-                self.AlignRefPoints = []
+                self.TargetRefPoints = []
+                self.SourceRefPoints = []
                 self.TotalRefPoints = []
 
-                self.BaseCounter = 0
-                self.AlignCounter = 0
+                self.TargetCounter = 0
+                self.SourceCounter = 0
                 self.visibleObjects = bpy.context.visible_objects.copy()
                 self.background_type = bpy.context.space_data.shading.background_type
                 bpy.context.space_data.shading.background_type = "VIEWPORT"
@@ -441,46 +537,83 @@ class BDENTAL_OT_AlignICP(bpy.types.Operator):
 
             BDENTAL_Props = context.scene.BDENTAL_Props
             AlignModalState = BDENTAL_Props.AlignModalState
+            IcpVidDict = eval(BDENTAL_Props.IcpVidDict)
 
             start = Tcounter()
 
-            BaseObject = context.object
-            AlignObject = [
-                obj for obj in bpy.context.selected_objects if not obj is BaseObject
+            TargetObj = context.object
+            SourceObj = [
+                obj for obj in bpy.context.selected_objects if not obj is TargetObj
             ][0]
 
-            def IcpPipline():
-                SourceVcoList = ObjectToIcpVcoList(obj=AlignObject, VG=False)
-                TargetVcoList = ObjectToIcpVcoList(obj=BaseObject, VG=False)
+            if IcpVidDict:
+                if [key for key in IcpVidDict.keys()] == [TargetObj, SourceObj]:
 
-                SourceVcoList, TargetVcoList = KdIcpPairs(
-                    SourceVcoList, TargetVcoList, VertsLimite=10000
-                )
+                    SourceVidList, TargetVidList = (
+                        IcpVidDict[SourceObj],
+                        IcpVidDict[TargetObj],
+                    )
+            else:
+                SourceVidList = [v.index for v in SourceObj.data.vertices]
+                TargetVidList = [v.index for v in TargetObj.data.vertices]
 
-                TransformMatrix = VtkICPTransform(
-                    SourceVcoList=SourceVcoList,
-                    TargetVcoList=TargetVcoList,
-                    iterations=30,
-                    Precision=0.0000001,
-                )
+            self.IcpPipline(
+                context,
+                SourceObj,
+                TargetObj,
+                SourceVidList,
+                TargetVidList,
+                VertsLimite=10000,
+                Iterations=30,
+            )
 
-                AlignObject.matrix_world = TransformMatrix @ AlignObject.matrix_world
-                context.view_layer.update()
-                for obj in [AlignObject, BaseObject]:
-                    obj.update_tag()
-                    obj.select_set(True)
-                    bpy.context.view_layer.objects.active = BaseObject
-
-            for _ in range(2):
-                IcpPipline()
-
-            # bpy.ops.object.select_all(action="DESELECT")
-            # print(f"TransformMatrix : {TransformMatrix}")
             finish = Tcounter()
 
-            print(f"total time : {finish-start} seconds")
+            print(f"ICP total time : {finish-start} seconds")
 
             return {"FINISHED"}
+
+    def IcpPipline(
+        self,
+        context,
+        SourceObj,
+        TargetObj,
+        SourceVidList,
+        TargetVidList,
+        VertsLimite,
+        Iterations,
+    ):
+
+        for _ in range(Iterations):
+
+            SourceVcoList = [
+                SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+                for idx in SourceVidList
+            ]
+            TargetVcoList = [
+                TargetObj.matrix_world @ TargetObj.data.vertices[idx].co
+                for idx in TargetVidList
+            ]
+            SourceKdList, TargetKdList, DistList = KdIcpPairs(
+                SourceVcoList, TargetVcoList, VertsLimite=10000
+            )
+            TransformMatrix = KdIcpPairsToTransformMatrix(
+                TargetKdList=TargetKdList, SourceKdList=SourceKdList
+            )
+            SourceObj.matrix_world = TransformMatrix @ SourceObj.matrix_world
+            # Update scene :
+            SourceObj.update_tag()
+            context.view_layer.update()
+
+            SourceVcoList = [
+                SourceObj.matrix_world @ SourceObj.data.vertices[idx].co
+                for idx in SourceVidList
+            ]
+            SourceKdList, TargetKdList, DistList = KdIcpPairs(
+                SourceVcoList, TargetVcoList, VertsLimite=10000
+            )
+            MaxDist = max(DistList)
+            print("Max distance = ", MaxDist)
 
 
 #############################################################################
