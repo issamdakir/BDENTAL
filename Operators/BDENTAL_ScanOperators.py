@@ -1,9 +1,9 @@
-# Python imports :
-import time, os, sys, shutil, math, threading, platform, subprocess
+import os, sys, shutil, math, threading
 from math import degrees, radians, pi
 import numpy as np
-from time import sleep, perf_counter as counter
+from time import sleep, perf_counter as Tcounter
 from queue import Queue
+from os.path import join, dirname, abspath, exists
 
 # Blender Imports :
 import bpy
@@ -17,23 +17,20 @@ from bpy.props import (
     FloatVectorProperty,
     BoolProperty,
 )
-
 import SimpleITK as sitk
-import cv2
 import vtk
+import cv2
 from vtk.util import numpy_support
 from vtk import vtkCommand
 
+# Global Variables :
 
-# import BDENTAL_Utils Functions :
 from . import BDENTAL_Utils
 from .BDENTAL_Utils import *
 
-# Global variables :
-addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ShadersBlendFile = os.path.join(
-    addon_dir, "Resources\BlendData\BDENTAL_BlendData.blend"
-)
+addon_dir = dirname(dirname(abspath(__file__)))
+ShadersBlendFile = join(
+    addon_dir, "Resources", "BlendData", "BDENTAL_BlendData.blend")
 GpShader = "VGS_Marcos_modified"  # "VGS_Marcos_01" "VGS_Dakir_01"
 Wmin = -400
 Wmax = 3000
@@ -41,6 +38,31 @@ ProgEvent = vtkCommand.ProgressEvent
 #######################################################################################
 ########################### CT Scan Load : Operators ##############################
 #######################################################################################
+# def GetMaxSerie(DCM_DIR):
+#     Sries_Dict = {}
+#     Error_Files = []
+    
+#     for i, dcm_file in enumerate(os.listdir(DCM_DIR)):
+#         path = join(DCM_DIR, dcm_file)
+#         try:
+#             img = sitk.ReadImage(path)
+#             Sr_Number = str(img.GetMetaData("0020|000e"))
+#             if not Sr_Number in Sries_Dict.keys():
+#                 Sries_Dict[Sr_Number] = 1
+#             else :
+#                 Sries_Dict[Sr_Number] += 1
+#             print(f" reading file number ({i})...")
+#         except RuntimeError :
+#             Error_Files.append(path)
+
+#     Count_dict = {}
+#     for k,v in Sries_Dict.items():
+#         Count_dict[v] = k
+#     MaxCount = max(Count_dict)
+#     MaxSerie = Count_dict[MaxCount]
+
+#     return MaxSerie, MaxCount
+
 def GetMaxSerie(UserDcmDir):
 
     SeriesDict = {}
@@ -48,8 +70,9 @@ def GetMaxSerie(UserDcmDir):
     series_IDs = Series_reader.GetGDCMSeriesIDs(UserDcmDir)
 
     if not series_IDs:
-        print("No valid DICOM Serie found in DICOM Folder ! ")
-        message = "No valid DICOM Serie found in DICOM Folder ! "
+        
+        message = ["No valid DICOM Serie found in DICOM Folder ! "]
+        print(message)
         ShowMessageBox(message=message, icon="COLORSET_01_VEC")
         return {"CANCELLED"}
 
@@ -75,11 +98,10 @@ def GetMaxSerie(UserDcmDir):
     MaxSerie = SeriesDict[MaxCount]
     return MaxSerie, MaxCount
 
-
 def Load_Dicom_funtion(context, q):
 
     ################################################################################################
-    start = time.perf_counter()
+    start = Tcounter()
     print("processing START...")
 
     ################################################################################################
@@ -90,26 +112,26 @@ def Load_Dicom_funtion(context, q):
 
     ################################################################################################
 
-    if not os.path.exists(UserProjectDir):
+    if not exists(UserProjectDir):
 
-        message = "The Selected Project Directory Path is not valid ! "
+        message = ["The Selected Project Directory Path is not valid ! "]
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
 
     elif os.listdir(UserProjectDir):
 
-        message = " Project Folder Should be Empty ! "
+        message = [" Project Folder Should be Empty ! "]
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
 
-    elif not os.path.exists(UserDcmDir):
+    elif not exists(UserDcmDir):
 
-        message = " Please use the Folder icon to Select a valid Dicom Directory ! "
+        message = [" Please use the Folder icon to Select a valid Dicom Directory ! "]
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
 
     elif not os.listdir(UserDcmDir):
-        message = "No valid DICOM Serie found in DICOM Folder ! "
+        message = ["No valid DICOM Serie found in DICOM Folder ! "]
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
 
@@ -119,7 +141,7 @@ def Load_Dicom_funtion(context, q):
         DcmSerie = Series_reader.GetGDCMSeriesFileNames(UserDcmDir, MaxSerie)
 
         ##################################### debug_02 ###################################
-        debug_01 = time.perf_counter()
+        debug_01 = Tcounter()
         message = f" MaxSerie ID : {MaxSerie}, MaxSerie Count : {MaxCount} ({round(debug_01-start,2)})"
         print(message)
         # q.put("Max DcmSerie extracted...")
@@ -223,7 +245,7 @@ def Load_Dicom_funtion(context, q):
         BDENTAL_Props.DcmInfo = str(DcmInfo)
 
         ###################################### debug_02 ##################################
-        debug_02 = time.perf_counter()
+        debug_02 = Tcounter()
         message = f"DcmInfo set done in {debug_02-debug_01}"
         print(message)
         # q.put("Dicom Info extracted...")
@@ -231,13 +253,13 @@ def Load_Dicom_funtion(context, q):
 
         #######################################################################################
         # Add directories :
-        SlicesDir = os.path.join(UserProjectDir, "Slices")
-        if not os.path.exists(SlicesDir):
+        SlicesDir = join(UserProjectDir, "Slices")
+        if not exists(SlicesDir):
             os.makedirs(SlicesDir)
         BDENTAL_Props.SlicesDir = SlicesDir
 
-        PngDir = os.path.join(UserProjectDir, "PNG")
-        if not os.path.exists(PngDir):
+        PngDir = join(UserProjectDir, "PNG")
+        if not exists(PngDir):
             os.makedirs(PngDir)
         BDENTAL_Props.PngDir = PngDir
 
@@ -245,11 +267,11 @@ def Load_Dicom_funtion(context, q):
         PatientID = DcmInfo["PatientID"]
         Preffix = PatientName or PatientID
         if Preffix:
-            # NrrdHuPath = os.path.join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
-            Nrrd255Path = os.path.join(UserProjectDir, f"{Preffix}_Image3D255.nrrd")
+            # NrrdHuPath = join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
+            Nrrd255Path = join(UserProjectDir, f"{Preffix}_BDENTAL_Image3D255.nrrd")
         else:
-            # NrrdHuPath = os.path.join(UserProjectDir, "Image3DHu.nrrd")
-            Nrrd255Path = os.path.join(UserProjectDir, "Image3D255.nrrd")
+            # NrrdHuPath = join(UserProjectDir, "Image3DHu.nrrd")
+            Nrrd255Path = join(UserProjectDir, "BDENTAL_Image3D255.nrrd")
         # BDENTAL_Props.NrrdHuPath = NrrdHuPath
         BDENTAL_Props.Nrrd255Path = Nrrd255Path
 
@@ -271,8 +293,10 @@ def Load_Dicom_funtion(context, q):
         sitk.WriteImage(Image3D_255, Nrrd255Path)
 
         ################################## debug_03 ######################################
-        debug_03 = time.perf_counter()
-        message = f"Nrrd255 written to Project directory, done in {debug_03-debug_02}"
+        debug_03 = Tcounter()
+        message = (
+            f"Nrrd255 written to Project directory, done in {debug_03-debug_02}"
+        )
         print(message)
         # q.put("nrrd 3D image file saved...")
         ##################################################################################
@@ -283,10 +307,8 @@ def Load_Dicom_funtion(context, q):
         def Image3DToPNG(i, slices, PngDir):
             img_Slice = slices[i]
             img_Name = "img_{0:04d}.png".format(i)
-            img_Out = os.path.join(PngDir, img_Name)
+            img_Out = join(PngDir, img_Name)
             cv2.imwrite(img_Out, img_Slice)
-            # sitk.WriteImage(img_Slice, img_Out)
-            # print(f"{img_Name} was processed...")
 
         #########################################################################################
         # Get slices list :
@@ -309,8 +331,10 @@ def Load_Dicom_funtion(context, q):
             t.join()
 
         #################################### debug_04 ####################################
-        debug_04 = time.perf_counter()
-        message = f"PNG images written to PNG directory, done in {debug_04-debug_03}"
+        debug_04 = Tcounter()
+        message = (
+            f"PNG images written to PNG directory, done in {debug_04-debug_03}"
+        )
         print(message)
         # q.put("PNG images saved...")
         ##################################################################################
@@ -319,27 +343,24 @@ def Load_Dicom_funtion(context, q):
             BlendFile = f"{Preffix}SCAN.blend"
         else:
             BlendFile = "SCAN.blend"
-        Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, BlendFile)
+        Blendpath = join(BDENTAL_Props.UserProjectDir, BlendFile)
         bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
 
         #################################### debug_05 ####################################
-        debug_05 = time.perf_counter()
-        message = (
-            f"Blender project saved to Project directory, done in {debug_05-debug_04}"
-        )
+        debug_05 = Tcounter()
+        message = f"Blender project saved to Project directory, done in {debug_05-debug_04}"
         print(message)
         # q.put("Blender project saved...")
         ##################################################################################
 
         #############################################################################################
-        finish = time.perf_counter()
+        finish = Tcounter()
         message = f"FINISHED in {finish-start} secondes"
         print(message)
         # q.put(message)
         #############################################################################################
 
     ####### End Load_Dicom_fuction ##############
-
 
 # BDENTAL CT Scan Series Load :
 class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
@@ -354,11 +375,10 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
 
         Load_Dicom_funtion(context, self.q)
 
-        message = "DICOM loaded successfully. "
+        message = ["DICOM loaded successfully. "]
         ShowMessageBox(message=message, icon="COLORSET_03_VEC")
 
         return {"FINISHED"}
-
 
 #######################################################################################
 # BDENTAL CT Scan 3DImage File Load :
@@ -377,20 +397,21 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
         #######################################################################################
         # 1rst check if paths are valid and supported :
 
-        if not os.path.exists(UserProjectDir):
+        if not exists(UserProjectDir):
 
-            message = "The Selected Project Directory Path is not valid ! "
+            message = ["The Selected Project Directory Path is not valid ! "]
             ShowMessageBox(message=message, icon="COLORSET_02_VEC")
             return {"CANCELLED"}
 
         if os.listdir(UserProjectDir):
 
-            message = " Project Folder Should be Empty ! "
+            message = [" Project Folder Should be Empty ! "]
             ShowMessageBox(message=message, icon="COLORSET_02_VEC")
             return {"CANCELLED"}
 
-        if not os.path.exists(UserImageFile):
-            message = " Please use the Image File icon to Select a valid Image File ! "
+        if not exists(UserImageFile):
+            message = [" Please Select a valid Image File ! "]
+            
             ShowMessageBox(message=message, icon="COLORSET_02_VEC")
             return {"CANCELLED"}
 
@@ -399,7 +420,7 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
         FileExt = os.path.splitext(UserImageFile)[1]
 
         if not IO:
-            message = f"{FileExt} files are not Supported! for more info about supported files please refer to Addon wiki "
+            message = [f"{FileExt} files are not Supported! for more info about supported files please refer to Addon wiki "]
             ShowMessageBox(message=message, icon="COLORSET_01_VEC")
             return {"CANCELLED"}
 
@@ -407,14 +428,19 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
         Depth = Image3D.GetDepth()
 
         if Depth == 0:
-            message = "Can't Build 3D Volume from 2D Image ! for more info about supported files please refer to Addon wiki"
+            message = ["Can't Build 3D Volume from 2D Image !", "for more info about supported files,", "please refer to Addon wiki"]
             ShowMessageBox(message=message, icon="COLORSET_01_VEC")
             return {"CANCELLED"}
+
+        ImgFileName = os.path.split(UserImageFile)[1]
+        
+    
+
         if not Image3D.GetPixelIDTypeAsString() in [
             "32-bit signed integer",
             "16-bit signed integer",
-        ]:
-            message = "Only Images with Hunsfield data are supported !"
+        ] and not "BDENTAL_Image3D255.nrrd" in ImgFileName:
+            message = ["Only Images with Hunsfield data are supported !"]
             ShowMessageBox(message=message, icon="COLORSET_01_VEC")
             return {"CANCELLED"}
         ###########################################################################################################
@@ -422,7 +448,7 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
         else:
 
             print("processing START...")
-            start = time.perf_counter()
+            start = Tcounter()
             ####################################
             Image3D = sitk.ReadImage(UserImageFile)
             # Get Dicom Info :
@@ -515,40 +541,38 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
 
             #######################################################################################
             # Add directories :
-            SlicesDir = os.path.join(UserProjectDir, "Slices")
-            if not os.path.exists(SlicesDir):
+            SlicesDir = join(UserProjectDir, "Slices")
+            if not exists(SlicesDir):
                 os.makedirs(SlicesDir)
             BDENTAL_Props.SlicesDir = SlicesDir
 
-            PngDir = os.path.join(UserProjectDir, "PNG")
-            if not os.path.exists(PngDir):
+            PngDir = join(UserProjectDir, "PNG")
+            if not exists(PngDir):
                 os.makedirs(PngDir)
             BDENTAL_Props.PngDir = PngDir
-
-            PatientName = DcmInfo["PatientName"]
-            PatientID = DcmInfo["PatientID"]
-            Preffix = PatientName or PatientID
-            if Preffix:
-                # NrrdHuPath = os.path.join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
-                Nrrd255Path = os.path.join(UserProjectDir, f"{Preffix}_Image3D255.nrrd")
-            else:
-                # NrrdHuPath = os.path.join(UserProjectDir, "Image3DHu.nrrd")
-                Nrrd255Path = os.path.join(UserProjectDir, "Image3D255.nrrd")
+                # NrrdHuPath = join(UserProjectDir, "Image3DHu.nrrd")
+            Nrrd255Path = join(UserProjectDir, "BDENTAL_Image3D255.nrrd")
             # BDENTAL_Props.NrrdHuPath = NrrdHuPath
             BDENTAL_Props.Nrrd255Path = Nrrd255Path
+            
+            if "BDENTAL_Image3D255.nrrd" in ImgFileName :
+                Image3D_255 = Image3D
+                
+            else :
+                
 
             #######################################################################################
-            # set IntensityWindowing  :
-            Image3D_255 = sitk.Cast(
-                sitk.IntensityWindowing(
-                    Image3D,
-                    windowMinimum=Wmin,
-                    windowMaximum=Wmax,
-                    outputMinimum=0.0,
-                    outputMaximum=255.0,
-                ),
-                sitk.sitkUInt8,
-            )
+                # set IntensityWindowing  :
+                Image3D_255 = sitk.Cast(
+                    sitk.IntensityWindowing(
+                        Image3D,
+                        windowMinimum=Wmin,
+                        windowMaximum=Wmax,
+                        outputMinimum=0.0,
+                        outputMaximum=255.0,
+                    ),
+                    sitk.sitkUInt8,
+                )
 
             # Convert Dicom to nrrd file :
             # sitk.WriteImage(Image3D, NrrdHuPath)
@@ -560,9 +584,8 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             def Image3DToPNG(i, slices, PngDir):
                 img_Slice = slices[i]
                 img_Name = "img_{0:04d}.png".format(i)
-                img_Out = os.path.join(PngDir, img_Name)
+                img_Out = join(PngDir, img_Name)
                 cv2.imwrite(img_Out, img_Slice)
-                # sitk.WriteImage(img_Slice, img_Out)
                 print(f"{img_Name} was processed...")
 
             #########################################################################################
@@ -584,20 +607,17 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
 
             for t in threads:
                 t.join()
-            if Preffix:
-                BlendFile = f"{Preffix}SCAN.blend"
-            else:
-                BlendFile = "SCAN.blend"
-            Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, BlendFile)
+            
+            BlendFile = "SCAN.blend"
+            Blendpath = join(BDENTAL_Props.UserProjectDir, BlendFile)
             bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
 
             #############################################################################################
-            finish = time.perf_counter()
+            finish = Tcounter()
             print(f"OPEN SCAN FINISHED in {finish-start} second(s)")
             #############################################################################################
 
             return {"FINISHED"}
-
 
 ##########################################################################################
 ######################### BDENTAL Volume Render : ########################################
@@ -671,22 +691,20 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
                 BlendFile = f"{Preffix}SCAN.blend"
             else:
                 BlendFile = "SCAN.blend"
-            Blendpath = os.path.join(BDENTAL_Props.UserProjectDir, BlendFile)
+            Blendpath = join(BDENTAL_Props.UserProjectDir, BlendFile)
             bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
             bpy.ops.view3d.view_selected(use_all_regions=False)
 
             return {"FINISHED"}
 
         else:
-            message = "Please delete, or change name of previously rendered volumes and retry !"
+            message = ["Please delete previously rendered CTVolume,", " or start a new project and retry !"]
             ShowMessageBox(message=message, icon="COLORSET_01_VEC")
             return {"CANCELLED"}
-
 
 ##########################################################################################
 ######################### BDENTAL Add Slices : ########################################
 ##########################################################################################
-
 
 class BDENTAL_OT_AddSlices(bpy.types.Operator):
     """ Add Volume Slices """
@@ -705,7 +723,6 @@ class BDENTAL_OT_AddSlices(bpy.types.Operator):
         obj = bpy.context.object
         MoveToCollection(obj=obj, CollName="SLICES")
         return {"FINISHED"}
-
 
 ###############################################################################
 ####################### BDENTAL VOLUME to Mesh : ################################
@@ -739,24 +756,26 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         Wmax = BDENTAL_Props.Wmax
         Nrrd255Path = BDENTAL_Props.Nrrd255Path
         Treshold = BDENTAL_Props.Treshold
-        if os.path.exists(Nrrd255Path):
+        if exists(Nrrd255Path):
             if GpShader == "VGS_Marcos_modified":
                 GpNode = bpy.data.node_groups[GpShader]
                 ColorPresetRamp = GpNode.nodes["ColorPresetRamp"].color_ramp
                 value = (Treshold - Wmin) / (Wmax - Wmin)
-                TreshColor = [round(c, 2) for c in ColorPresetRamp.evaluate(value)[0:3]]
+                TreshColor = [
+                    round(c, 2) for c in ColorPresetRamp.evaluate(value)[0:3]
+                ]
                 self.SegmentColor = TreshColor + [1.0]
             self.q = Queue()
             wm = context.window_manager
             return wm.invoke_props_dialog(self)
 
         else:
-            message = " Image File not Found in Project Folder ! "
+            message = [" Image File not Found in Project Folder ! "]
             ShowMessageBox(message=message, icon="COLORSET_01_VEC")
             return {"CANCELLED"}
 
     def DicomToMesh(self):
-        counter_start = counter()
+        counter_start = Tcounter()
         # Load Infos :
         #########################################################################
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
@@ -771,7 +790,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
 
         Wmin = BDENTAL_Props.Wmin
         Wmax = BDENTAL_Props.Wmax
-        StlPath = os.path.join(UserProjectDir, f"{self.SegmentName}_SEGMENTATION.stl")
+        StlPath = join(UserProjectDir, f"{self.SegmentName}_SEGMENTATION.stl")
         Thikness = 1
         # Reduction = 0.9
         SmoothIterations = SmthIter = 5
@@ -796,7 +815,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         elif Treshold255 == 255:
             Treshold255 = 254
 
-        step1 = counter()
+        step1 = Tcounter()
         self.TimingDict["Read DICOM"] = step1 - counter_start
         # print(f"step 1 : Read DICOM ({step1-start})")
 
@@ -812,9 +831,9 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         polysCount = Mesh.GetNumberOfPolys()
         polysLimit = 800000
 
-        # step1 = time.perf_counter()
+        # step1 = Tcounter()
         # print(f"before reduction finished in : {step1-start} secondes")
-        step2 = counter()
+        step2 = Tcounter()
         self.TimingDict["extract mesh"] = step2 - step1
         # print(f"step 2 : extract mesh ({step2-step1})")
 
@@ -833,11 +852,11 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
             )
             Mesh = ReductedMesh
             # print(f"Reduced Mesh polygons count : {Mesh.GetNumberOfPolys()} ...")
-            # step2 = time.perf_counter()
+            # step2 = Tcounter()
             # print(f"reduction finished in : {step2-step1} secondes")
         # else:
         # print(f"Original mesh polygons count is Optimal : ({polysCount})...")
-        step3 = counter()
+        step3 = Tcounter()
         self.TimingDict["Reduct mesh"] = step3 - step2
         # print(f"step 3 : Reduct mesh ({step3-step2})")
 
@@ -851,12 +870,12 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
             start=0.5,
             finish=0.6,
         )
-        step3 = counter()
+        step3 = Tcounter()
         # try:
         #     print(f"SMOOTHING finished in : {step3-step2} secondes...")
         # except Exception:
         #     print(f"SMOOTHING finished in : {step3-step1} secondes (no Reduction!)...")
-        step4 = counter()
+        step4 = Tcounter()
         self.TimingDict["Smooth mesh"] = step4 - step3
         # print(f"step 4 : Smooth mesh ({step4-step3})")
 
@@ -866,7 +885,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
             mesh=SmoothedMesh,
             Matrix=VtkMatrix,
         )
-        step5 = counter()
+        step5 = Tcounter()
         self.TimingDict["Mesh Transform"] = step5 - step4
         # print(f"step 5 : set mesh orientation({step5-step4})")
 
@@ -889,9 +908,9 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         writer.SetFileName(StlPath)
         writer.Write()
 
-        # step4 = time.perf_counter()
+        # step4 = Tcounter()
         # print(f"WRITING finished in : {step4-step3} secondes")
-        step6 = counter()
+        step6 = Tcounter()
         self.TimingDict["Export mesh"] = step6 - step5
         # print(f"step 6 : Export mesh ({step6-step5})")
 
@@ -907,7 +926,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
 
         bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
-        step7 = counter()
+        step7 = Tcounter()
         self.TimingDict["Import mesh"] = step7 - step6
         # print(f"step 7 : Import mesh({step7-step6})")
         ############### step 8 : Add material... #########################
@@ -924,25 +943,27 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         bpy.context.object.modifiers["CorrectiveSmooth"].iterations = 3
         bpy.context.object.modifiers["CorrectiveSmooth"].use_only_smooth = True
 
-        # step5 = time.perf_counter()
+        # step5 = Tcounter()
         # print(f"Blender importing finished in : {step5-step4} secondes")
 
-        step8 = counter()
+        step8 = Tcounter()
         self.TimingDict["Add material"] = step8 - step7
         # print(f"step 8 : Add material({step8-step7})")
 
         self.q.put(["End"])
-        counter_finish = counter()
+        counter_finish = Tcounter()
         self.TimingDict["Total Time"] = counter_finish - counter_start
 
     def execute(self, context):
-        counter_start = counter()
+        counter_start = Tcounter()
         TerminalProgressBar = BDENTAL_Utils.TerminalProgressBar
         CV2_progress_bar = BDENTAL_Utils.CV2_progress_bar
         self.t1 = threading.Thread(
             target=TerminalProgressBar, args=[self.q, counter_start], daemon=True
         )
-        self.t2 = threading.Thread(target=CV2_progress_bar, args=[self.q], daemon=True)
+        self.t2 = threading.Thread(
+            target=CV2_progress_bar, args=[self.q], daemon=True
+        )
 
         # self.t1.start()
         self.t2.start()
@@ -953,7 +974,6 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         # print(self.TimingDict)
 
         return {"FINISHED"}
-
 
 #################################################################################################
 # Registration :
@@ -967,12 +987,10 @@ classes = [
     BDENTAL_OT_TreshSegment,
 ]
 
-
 def register():
 
     for cls in classes:
         bpy.utils.register_class(cls)
-
 
 def unregister():
 

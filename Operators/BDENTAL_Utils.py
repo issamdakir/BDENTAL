@@ -1,37 +1,37 @@
-# # Python imports :
+# Python imports :
+import os, sys, shutil
+from os.path import join, dirname, exists
 
-import time, os, sys, shutil, math, threading, platform, subprocess, string
 from math import degrees, radians, pi
 import numpy as np
-from time import sleep, perf_counter as counter
+from time import sleep, perf_counter as Tcounter
 from queue import Queue
-
-import SimpleITK as sitk
-import cv2
-import vtk
-from vtk.util import numpy_support
-from vtk import vtkCommand
 
 # Blender Imports :
 import bpy
 import bmesh
 from mathutils import Matrix, Vector, Euler, kdtree
 
+import SimpleITK as sitk
+import vtk
+import cv2
+from vtk.util import numpy_support
+from vtk import vtkCommand
+
 # Global Variables :
-addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 ProgEvent = vtkCommand.ProgressEvent
 
 #######################################################################################
 # Popup message box function :
 #######################################################################################
 
-
-def ShowMessageBox(message="", title="INFO", icon="INFO"):
+def ShowMessageBox(message=[], title="INFO", icon="INFO"):
     def draw(self, context):
-        self.layout.label(text=message)
+        for txtLine in message:
+            self.layout.label(text=txtLine)
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
-
 
 #######################################################################################
 # Load CT Scan functions :
@@ -42,11 +42,10 @@ def ShowMessageBox(message="", title="INFO", icon="INFO"):
 ############################
 def make_directory(Root, DirName):
 
-    DirPath = os.path.join(Root, DirName)
+    DirPath = join(Root, DirName)
     if not DirName in os.listdir(Root):
         os.mkdir(DirPath)
     return DirPath
-
 
 ################################
 # Copy DcmSerie To ProjDir function :
@@ -55,11 +54,9 @@ def CopyDcmSerieToProjDir(DcmSerie, DicomSeqDir):
     for i in range(len(DcmSerie)):
         shutil.copy2(DcmSerie[i], DicomSeqDir)
 
-
 ##########################################################################################
 ######################### BDENTAL Volume Render : ########################################
 ##########################################################################################
-
 
 def PlaneCut(Target, Plane, inner=False, outer=False, fill=False):
 
@@ -73,11 +70,14 @@ def PlaneCut(Target, Plane, inner=False, outer=False, fill=False):
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.bisect(
-        plane_co=Pco, plane_no=Pno, use_fill=fill, clear_inner=inner, clear_outer=outer
+        plane_co=Pco,
+        plane_no=Pno,
+        use_fill=fill,
+        clear_inner=inner,
+        clear_outer=outer,
     )
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
-
 
 def AddBooleanCube(DimX, DimY, DimZ):
     bpy.ops.mesh.primitive_cube_add(
@@ -93,7 +93,6 @@ def AddBooleanCube(DimX, DimY, DimZ):
     VOI.display_type = "WIRE"
     return VOI
 
-
 def AddNode(nodes, type, name):
 
     node = nodes.new(type)
@@ -101,7 +100,6 @@ def AddNode(nodes, type, name):
     # node.location[0] -= 200
 
     return node
-
 
 def AddPlaneMesh(DimX, DimY, Name):
     x = DimX / 2
@@ -122,7 +120,6 @@ def AddPlaneMesh(DimX, DimY, Name):
 
     return mesh_data
 
-
 def AddPlaneObject(Name, mesh, CollName):
     Plane_obj = bpy.data.objects.new(Name, mesh)
     Coll = bpy.data.collections.get(CollName)
@@ -133,7 +130,6 @@ def AddPlaneObject(Name, mesh, CollName):
         Coll.objects.link(Plane_obj)
 
     return Plane_obj
-
 
 def MoveToCollection(obj, CollName):
 
@@ -149,7 +145,6 @@ def MoveToCollection(obj, CollName):
             if Coll is not NewColl:
                 Coll.objects.unlink(obj)
 
-
 def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
@@ -163,7 +158,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     ImagesList = sorted(os.listdir(PngDir))
 
     #################################################################################
-    Start = time.perf_counter()
+    Start = Tcounter()
     #################################################################################
     # ///////////////////////////////////////////////////////////////////////////#
     ######################## Set Render settings : #############################
@@ -197,7 +192,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
 
     ################### Load all PNG images : ###############################
     for ImagePNG in ImagesList:
-        image_path = os.path.join(PngDir, ImagePNG)
+        image_path = join(PngDir, ImagePNG)
         bpy.data.images.load(image_path)
 
     bpy.ops.file.pack_all()
@@ -245,8 +240,12 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
                 nodes.remove(node)
 
         ImageData = bpy.data.images.get(ImagePNG)
-        TextureCoord = AddNode(nodes, type="ShaderNodeTexCoord", name="TextureCoord")
-        ImageTexture = AddNode(nodes, type="ShaderNodeTexImage", name="Image Texture")
+        TextureCoord = AddNode(
+            nodes, type="ShaderNodeTexCoord", name="TextureCoord"
+        )
+        ImageTexture = AddNode(
+            nodes, type="ShaderNodeTexImage", name="Image Texture"
+        )
         ImageTexture.image = ImageData
         ImageData.colorspace_settings.name = "Non-Color"
 
@@ -257,10 +256,12 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         # Load VGS Group Node :
         VGS = bpy.data.node_groups.get(GpShader)
         if not VGS:
-            filepath = os.path.join(ShadersBlendFile, f"NodeTree\{GpShader}")
-            directory = os.path.join(ShadersBlendFile, "NodeTree")
+            filepath = join(ShadersBlendFile, "NodeTree", GpShader)
+            directory = join(ShadersBlendFile, "NodeTree")
             filename = GpShader
-            bpy.ops.wm.append(filepath=filepath, filename=filename, directory=directory)
+            bpy.ops.wm.append(
+                filepath=filepath, filename=filename, directory=directory
+            )
             VGS = bpy.data.node_groups.get(GpShader)
 
         GroupNode = nodes.new("ShaderNodeGroup")
@@ -331,9 +332,8 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
         Voxel.lock_rotation[i] = True
         Voxel.lock_scale[i] = True
 
-    Finish = time.perf_counter()
+    Finish = Tcounter()
     print(f"CT-Scan loaded in {Finish-Start} secondes")
-
 
 def Scene_Settings():
     # Set World Shader node :
@@ -392,7 +392,6 @@ def Scene_Settings():
     scn.view_settings.gamma = 1.0
     scn.eevee.use_ssr = True
 
-
 #################################################################################################
 # Add Slices :
 #################################################################################################
@@ -404,10 +403,10 @@ def AxialSliceUpdate(scene):
     DcmInfo = eval(BDENTAL_Props.DcmInfo)
     TransformMatrix = DcmInfo["TransformMatrix"]
 
-    ImagePath = os.path.join(SlicesDir, "AXIAL_SLICE.png")
+    ImagePath = join(SlicesDir, "AXIAL_SLICE.png")
     Plane = bpy.context.scene.objects.get("AXIAL_SLICE")
 
-    if Plane and os.path.exists(ImageData):
+    if Plane and exists(ImageData):
 
         #########################################
         #########################################
@@ -473,7 +472,6 @@ def AxialSliceUpdate(scene):
             BlenderImage = bpy.data.images.get("AXIAL_SLICE.png")
         BlenderImage.reload()
 
-
 def CoronalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
@@ -482,10 +480,10 @@ def CoronalSliceUpdate(scene):
     DcmInfo = eval(BDENTAL_Props.DcmInfo)
     TransformMatrix = DcmInfo["TransformMatrix"]
 
-    ImagePath = os.path.join(SlicesDir, "CORONAL_SLICE.png")
+    ImagePath = join(SlicesDir, "CORONAL_SLICE.png")
     Plane = bpy.context.scene.objects.get("CORONAL_SLICE")
 
-    if Plane and os.path.exists(ImageData):
+    if Plane and exists(ImageData):
 
         #########################################
         #########################################
@@ -551,7 +549,6 @@ def CoronalSliceUpdate(scene):
             BlenderImage = bpy.data.images.get("CORONAL_SLICE.png")
         BlenderImage.reload()
 
-
 def SagitalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
@@ -560,10 +557,10 @@ def SagitalSliceUpdate(scene):
     DcmInfo = eval(BDENTAL_Props.DcmInfo)
     TransformMatrix = DcmInfo["TransformMatrix"]
 
-    ImagePath = os.path.join(SlicesDir, "SAGITAL_SLICE.png")
+    ImagePath = join(SlicesDir, "SAGITAL_SLICE.png")
     Plane = bpy.context.scene.objects.get("SAGITAL_SLICE")
 
-    if Plane and os.path.exists(ImageData):
+    if Plane and exists(ImageData):
 
         #########################################
         #########################################
@@ -629,7 +626,6 @@ def SagitalSliceUpdate(scene):
             BlenderImage = bpy.data.images.get("SAGITAL_SLICE.png")
         BlenderImage.reload()
 
-
 ####################################################################
 def AddAxialSlice():
 
@@ -684,7 +680,7 @@ def AddAxialSlice():
             nodes.remove(node)
     SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
     ImageName = "AXIAL_SLICE.png"
-    ImagePath = os.path.join(SlicesDir, ImageName)
+    ImagePath = join(SlicesDir, ImageName)
 
     # write "AXIAL_SLICE.png" to here ImagePath
     AxialSliceUpdate(bpy.context.scene)
@@ -704,9 +700,12 @@ def AddAxialSlice():
     bpy.ops.wm.tool_set_by_id(name="builtin.move")
 
     post_handlers = bpy.app.handlers.depsgraph_update_post
-    [post_handlers.remove(h) for h in post_handlers if h.__name__ == "AxialSliceUpdate"]
+    [
+        post_handlers.remove(h)
+        for h in post_handlers
+        if h.__name__ == "AxialSliceUpdate"
+    ]
     post_handlers.append(AxialSliceUpdate)
-
 
 def AddCoronalSlice():
 
@@ -740,7 +739,7 @@ def AddCoronalSlice():
     CoronalDims = Vector((DimX, DimY, 0.0))
     CoronalPlane.dimensions = CoronalDims
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    CoronalPlane.rotation_euler = Euler((math.pi / 2, 0.0, 0.0), "XYZ")
+    CoronalPlane.rotation_euler = Euler((pi / 2, 0.0, 0.0), "XYZ")
     CoronalPlane.location = VC
     # Add Material :
     mat = bpy.data.materials.get("CORONAL_SLICE_mat") or bpy.data.materials.new(
@@ -762,7 +761,7 @@ def AddCoronalSlice():
             nodes.remove(node)
     SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
     ImageName = "CORONAL_SLICE.png"
-    ImagePath = os.path.join(SlicesDir, ImageName)
+    ImagePath = join(SlicesDir, ImageName)
 
     # write "CORONAL_SLICE.png" to here ImagePath
     CoronalSliceUpdate(bpy.context.scene)
@@ -788,7 +787,6 @@ def AddCoronalSlice():
         if h.__name__ == "CoronalSliceUpdate"
     ]
     post_handlers.append(CoronalSliceUpdate)
-
 
 def AddSagitalSlice():
 
@@ -822,7 +820,7 @@ def AddSagitalSlice():
     SagitalDims = Vector((DimX, DimY, 0.0))
     SagitalPlane.dimensions = SagitalDims
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    SagitalPlane.rotation_euler = Euler((math.pi / 2, 0.0, math.pi / 2), "XYZ")
+    SagitalPlane.rotation_euler = Euler((pi / 2, 0.0, pi / 2), "XYZ")
     SagitalPlane.location = VC
     # Add Material :
     mat = bpy.data.materials.get("SAGITAL_SLICE_mat") or bpy.data.materials.new(
@@ -844,7 +842,7 @@ def AddSagitalSlice():
             nodes.remove(node)
     SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
     ImageName = "SAGITAL_SLICE.png"
-    ImagePath = os.path.join(SlicesDir, ImageName)
+    ImagePath = join(SlicesDir, ImageName)
 
     # write "SAGITAL_SLICE.png" to here ImagePath
     SagitalSliceUpdate(bpy.context.scene)
@@ -871,14 +869,12 @@ def AddSagitalSlice():
     ]
     post_handlers.append(SagitalSliceUpdate)
 
-
 #############################################################################
 # SimpleITK vtk Image to Mesh Functions :
 #############################################################################
 def HuTo255(Hu, Wmin, Wmax):
     V255 = int(((Hu - Wmin) / (Wmax - Wmin)) * 255)
     return V255
-
 
 def ResizeImage(sitkImage, Ratio):
     image = sitkImage
@@ -899,13 +895,11 @@ def ResizeImage(sitkImage, Ratio):
     )
     return ResizedImage
 
-
 # def VTK_Terminal_progress(caller, event, q):
 #     ProgRatio = round(float(caller.GetProgress()), 2)
 #     q.put(
 #         ["loop", f"PROGRESS : {step} processing...", "", {start}, {finish}, ProgRatio]
 #     )
-
 
 def VTKprogress(caller, event):
     pourcentage = int(caller.GetProgress() * 100)
@@ -915,14 +909,20 @@ def VTKprogress(caller, event):
     sys.stdout.flush()
     progress_bar(pourcentage, Delay=1)
 
-
 def TerminalProgressBar(
-    q, counter_start, iter=100, maxfill=20, symb1="\u2588", symb2="\u2502", periode=10
+    q,
+    counter_start,
+    iter=100,
+    maxfill=20,
+    symb1="\u2588",
+    symb2="\u2502",
+    periode=10,
 ):
 
-    if platform.system() == "Windows":
-        cmd = "chcp 65001 & set PYTHONIOENCODING=utf-8"
-        subprocess.call(cmd, shell=True)
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="cp65001")
+        # cmd = "chcp 65001 & set PYTHONIOENCODING=utf-8"
+        # subprocess.call(cmd, shell=True)
 
     print("\n")
 
@@ -931,7 +931,7 @@ def TerminalProgressBar(
             signal = q.get()
 
             if "End" in signal[0]:
-                finish = counter()
+                finish = Tcounter()
                 line = f"{symb1*maxfill}  100% Finished.------Total Time : {round(finish-counter_start,2)}"
                 # clear sys.stdout line and return to line start:
                 # sys.stdout.write("\r")
@@ -958,7 +958,9 @@ def TerminalProgressBar(
                         # sys.stdout.write("\r"+" " * 80)
                         # sys.stdout.flush()
                         # write line :
-                        sys.stdout.write("\r" + " " * 80 + "\r" + line)  # f"{Char}"*i*2
+                        sys.stdout.write(
+                            "\r" + " " * 80 + "\r" + line
+                        )  # f"{Char}"*i*2
                         sys.stdout.flush()
                         sleep(periode / iter)
                     else:
@@ -970,7 +972,9 @@ def TerminalProgressBar(
                 pourcentage = int(ratio * 100)
                 symb1_fill = int(ratio * maxfill)
                 symb2_fill = int(maxfill - symb1_fill)
-                line = f"{symb1*symb1_fill}{symb2*symb2_fill}  {pourcentage}% {Uptxt}"
+                line = (
+                    f"{symb1*symb1_fill}{symb2*symb2_fill}  {pourcentage}% {Uptxt}"
+                )
                 # clear sys.stdout line and return to line start:
                 # sys.stdout.write("\r")
                 # sys.stdout.write(" " * 100)
@@ -981,8 +985,7 @@ def TerminalProgressBar(
                 sys.stdout.flush()
 
         else:
-            time.sleep(0.1)
-
+            sleep(0.1)
 
 def sitkTovtk(sitkImage):
     """Convert sitk image to a VTK image"""
@@ -1007,7 +1010,6 @@ def sitkTovtk(sitkImage):
     vtkImage.Modified()
     return vtkImage
 
-
 def vtk_MC_Func(vtkImage, Treshold):
     MCFilter = vtk.vtkMarchingCubes()
     MCFilter.ComputeNormalsOn()
@@ -1017,7 +1019,6 @@ def vtk_MC_Func(vtkImage, Treshold):
     mesh = vtk.vtkPolyData()
     mesh.DeepCopy(MCFilter.GetOutput())
     return mesh
-
 
 def vtkMeshReduction(q, mesh, reduction, step, start, finish):
     """Reduce a mesh using VTK's vtkQuadricDecimation filter."""
@@ -1045,7 +1046,6 @@ def vtkMeshReduction(q, mesh, reduction, step, start, finish):
     mesh.DeepCopy(decimatFilter.GetOutput())
     return mesh
 
-
 def vtkSmoothMesh(q, mesh, Iterations, step, start, finish):
     """Smooth a mesh using VTK's vtkSmoothPolyData filter."""
 
@@ -1072,7 +1072,6 @@ def vtkSmoothMesh(q, mesh, Iterations, step, start, finish):
     mesh.DeepCopy(SmoothFilter.GetOutput())
     return mesh
 
-
 def vtkTransformMesh(mesh, Matrix):
     """Transform a mesh using VTK's vtkTransformPolyData filter."""
 
@@ -1086,7 +1085,6 @@ def vtkTransformMesh(mesh, Matrix):
     mesh.DeepCopy(transformFilter.GetOutput())
     return mesh
 
-
 def vtkfillholes(mesh, size):
     FillHolesFilter = vtk.vtkFillHolesFilter()
     FillHolesFilter.SetInputData(mesh)
@@ -1094,7 +1092,6 @@ def vtkfillholes(mesh, size):
     FillHolesFilter.Update()
     mesh.DeepCopy(FillHolesFilter.GetOutput())
     return mesh
-
 
 def vtkCleanMesh(mesh, connectivityFilter=False):
     """Clean a mesh using VTK's CleanPolyData filter."""
@@ -1114,7 +1111,6 @@ def vtkCleanMesh(mesh, connectivityFilter=False):
     CleanFilter.Update()
     mesh.DeepCopy(CleanFilter.GetOutput())
     return mesh
-
 
 def sitkToContourArray(sitkImage, HuMin, HuMax, Wmin, Wmax, Thikness):
     """Convert sitk image to a VTK image"""
@@ -1154,7 +1150,6 @@ def sitkToContourArray(sitkImage, HuMin, HuMax, Wmin, Wmax, Thikness):
 
     return ContourArray255
 
-
 def vtkContourFilter(vtkImage, isovalue=0.0):
     """Extract an isosurface from a volume."""
 
@@ -1165,7 +1160,6 @@ def vtkContourFilter(vtkImage, isovalue=0.0):
     mesh = vtk.vtkPolyData()
     mesh.DeepCopy(ContourFilter.GetOutput())
     return mesh
-
 
 def CV2_progress_bar(q, iter=100):
     while True:
@@ -1197,8 +1191,7 @@ def CV2_progress_bar(q, iter=100):
                 progress_bar(pourcentage, Uptxt)
 
         else:
-            time.sleep(0.1)
-
+            sleep(0.1)
 
 def progress_bar(pourcentage, Uptxt, Lowtxt="", Title="BDENATAL", Delay=1):
 
@@ -1276,5 +1269,5 @@ def progress_bar(pourcentage, Uptxt, Lowtxt="", Title="BDENATAL", Delay=1):
         )
         cv2.imshow(Title, img)
         cv2.waitKey(Delay)
-        time.sleep(4)
+        sleep(4)
         cv2.destroyAllWindows()
