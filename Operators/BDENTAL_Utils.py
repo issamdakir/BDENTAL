@@ -6,6 +6,8 @@ from math import degrees, radians, pi
 import numpy as np
 from time import sleep, perf_counter as Tcounter
 from queue import Queue
+from importlib import reload  
+
 
 # Blender Imports :
 import bpy
@@ -15,6 +17,10 @@ from mathutils import Matrix, Vector, Euler, kdtree
 import SimpleITK as sitk
 import vtk
 import cv2
+try :
+    cv2 = reload(cv2)
+except ImportError :
+    pass
 from vtk.util import numpy_support
 from vtk import vtkCommand
 
@@ -399,14 +405,17 @@ def AxialSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
     ImageData = BDENTAL_Props.Nrrd255Path
-    SlicesDir = BDENTAL_Props.SlicesDir
-    DcmInfo = eval(BDENTAL_Props.DcmInfo)
-    TransformMatrix = DcmInfo["TransformMatrix"]
+    Plane = bpy.context.scene.objects.get("1_AXIAL_SLICE")
 
-    ImagePath = join(SlicesDir, "AXIAL_SLICE.png")
-    Plane = bpy.context.scene.objects.get("AXIAL_SLICE")
+    Condition1 = exists(ImageData)
+    Condition2 = (bpy.context.view_layer.objects.active == Plane)
 
-    if Plane and exists(ImageData):
+    if Plane and Condition1 and Condition2 :
+
+        SlicesDir = BDENTAL_Props.SlicesDir
+        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        TransformMatrix = DcmInfo["TransformMatrix"]
+        ImagePath = join(SlicesDir, "1_AXIAL_SLICE.png")
 
         #########################################
         #########################################
@@ -414,21 +423,13 @@ def AxialSliceUpdate(scene):
         Image3D_255 = sitk.ReadImage(ImageData)
         Sp = Spacing = Image3D_255.GetSpacing()
         Sz = Size = Image3D_255.GetSize()
-        DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
         Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
         Image3D_255.SetOrigin(Ortho_Origin)
         Image3D_255.SetDirection(np.identity(3).flatten())
-        Origin = Image3D_255.GetOrigin()
-        Direction = Image3D_255.GetDirection()
-        P0 = Image3D_255.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
-        P_diagonal = Image3D_255.TransformContinuousIndexToPhysicalPoint(
-            (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
-        )
-        NewVCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
-
+        
         # Output Parameters :
-        Out_Origin = [Origin[0], Origin[1], 0]
-        Out_Direction = Vector(Direction)
+        Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
+        Out_Direction = Vector(np.identity(3).flatten())
         Out_Size = (Sz[0], Sz[1], 1)
         Out_Spacing = Sp
 
@@ -466,24 +467,27 @@ def AxialSliceUpdate(scene):
         cv2.imwrite(ImagePath, Flipped_Array)
         #############################################
         # Update Blender Image data :
-        BlenderImage = bpy.data.images.get("AXIAL_SLICE.png")
+        BlenderImage = bpy.data.images.get("1_AXIAL_SLICE.png")
         if not BlenderImage:
             bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get("AXIAL_SLICE.png")
+            BlenderImage = bpy.data.images.get("1_AXIAL_SLICE.png")
         BlenderImage.reload()
 
 def CoronalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
     ImageData = BDENTAL_Props.Nrrd255Path
-    SlicesDir = BDENTAL_Props.SlicesDir
-    DcmInfo = eval(BDENTAL_Props.DcmInfo)
-    TransformMatrix = DcmInfo["TransformMatrix"]
+    Plane = bpy.context.scene.objects.get("2_CORONAL_SLICE")
 
-    ImagePath = join(SlicesDir, "CORONAL_SLICE.png")
-    Plane = bpy.context.scene.objects.get("CORONAL_SLICE")
+    Condition1 = exists(ImageData)
+    Condition2 = (bpy.context.view_layer.objects.active == Plane)
 
-    if Plane and exists(ImageData):
+    if Plane and Condition1 and Condition2 :
+
+        SlicesDir = BDENTAL_Props.SlicesDir
+        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        TransformMatrix = DcmInfo["TransformMatrix"]
+        ImagePath = join(SlicesDir, "2_CORONAL_SLICE.png")
 
         #########################################
         #########################################
@@ -491,21 +495,13 @@ def CoronalSliceUpdate(scene):
         Image3D_255 = sitk.ReadImage(ImageData)
         Sp = Spacing = Image3D_255.GetSpacing()
         Sz = Size = Image3D_255.GetSize()
-        DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
         Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
         Image3D_255.SetOrigin(Ortho_Origin)
         Image3D_255.SetDirection(np.identity(3).flatten())
-        Origin = Image3D_255.GetOrigin()
-        Direction = Image3D_255.GetDirection()
-        P0 = Image3D_255.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
-        P_diagonal = Image3D_255.TransformContinuousIndexToPhysicalPoint(
-            (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
-        )
-        NewVCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
-
+        
         # Output Parameters :
-        Out_Origin = [Origin[0], Origin[1], 0]
-        Out_Direction = Vector(Direction)
+        Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
+        Out_Direction = Vector(np.identity(3).flatten())
         Out_Size = (Sz[0], Sz[1], 1)
         Out_Spacing = Sp
 
@@ -520,7 +516,7 @@ def CoronalSliceUpdate(scene):
         ##########################################
         # Euler3DTransform :
         Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter(NewVCenter)
+        Euler3D.SetCenter((0, 0, 0))
         Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
         Euler3D.SetTranslation(Tvec)
         Euler3D.ComputeZYXOn()
@@ -543,24 +539,27 @@ def CoronalSliceUpdate(scene):
         cv2.imwrite(ImagePath, Flipped_Array)
         #############################################
         # Update Blender Image data :
-        BlenderImage = bpy.data.images.get("CORONAL_SLICE.png")
+        BlenderImage = bpy.data.images.get("2_CORONAL_SLICE.png")
         if not BlenderImage:
             bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get("CORONAL_SLICE.png")
+            BlenderImage = bpy.data.images.get("2_CORONAL_SLICE.png")
         BlenderImage.reload()
 
 def SagitalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
     ImageData = BDENTAL_Props.Nrrd255Path
-    SlicesDir = BDENTAL_Props.SlicesDir
-    DcmInfo = eval(BDENTAL_Props.DcmInfo)
-    TransformMatrix = DcmInfo["TransformMatrix"]
+    Plane = bpy.context.scene.objects.get("3_SAGITAL_SLICE")
 
-    ImagePath = join(SlicesDir, "SAGITAL_SLICE.png")
-    Plane = bpy.context.scene.objects.get("SAGITAL_SLICE")
+    Condition1 = exists(ImageData)
+    Condition2 = (bpy.context.view_layer.objects.active == Plane)
 
-    if Plane and exists(ImageData):
+    if Plane and Condition1 and Condition2 :
+
+        SlicesDir = BDENTAL_Props.SlicesDir
+        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        TransformMatrix = DcmInfo["TransformMatrix"]
+        ImagePath = join(SlicesDir, "3_SAGITAL_SLICE.png")
 
         #########################################
         #########################################
@@ -568,23 +567,16 @@ def SagitalSliceUpdate(scene):
         Image3D_255 = sitk.ReadImage(ImageData)
         Sp = Spacing = Image3D_255.GetSpacing()
         Sz = Size = Image3D_255.GetSize()
-        DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
         Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
         Image3D_255.SetOrigin(Ortho_Origin)
         Image3D_255.SetDirection(np.identity(3).flatten())
-        Origin = Image3D_255.GetOrigin()
-        Direction = Image3D_255.GetDirection()
-        P0 = Image3D_255.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
-        P_diagonal = Image3D_255.TransformContinuousIndexToPhysicalPoint(
-            (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
-        )
-        NewVCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
-
+        
         # Output Parameters :
-        Out_Origin = [Origin[0], Origin[1], 0]
-        Out_Direction = Vector(Direction)
+        Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
+        Out_Direction = Vector(np.identity(3).flatten())
         Out_Size = (Sz[0], Sz[1], 1)
         Out_Spacing = Sp
+
 
         ######################################
         # Get Plane Orientation and location :
@@ -597,7 +589,7 @@ def SagitalSliceUpdate(scene):
         ##########################################
         # Euler3DTransform :
         Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter(NewVCenter)
+        Euler3D.SetCenter((0, 0, 0))
         Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
         Euler3D.SetTranslation(Tvec)
         Euler3D.ComputeZYXOn()
@@ -620,16 +612,16 @@ def SagitalSliceUpdate(scene):
         cv2.imwrite(ImagePath, Flipped_Array)
         #############################################
         # Update Blender Image data :
-        BlenderImage = bpy.data.images.get("SAGITAL_SLICE.png")
+        BlenderImage = bpy.data.images.get("3_SAGITAL_SLICE.png")
         if not BlenderImage:
             bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get("SAGITAL_SLICE.png")
+            BlenderImage = bpy.data.images.get("3_SAGITAL_SLICE.png")
         BlenderImage.reload()
 
 ####################################################################
 def AddAxialSlice():
 
-    name = "AXIAL_SLICE"
+    name = "1_AXIAL_SLICE"
     DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
     Sp, Sz, Origin, Direction, VC = (
         DcmInfo["Spacing"],
@@ -661,8 +653,8 @@ def AddAxialSlice():
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     AxialPlane.location = VC
     # Add Material :
-    mat = bpy.data.materials.get("AXIAL_SLICE_mat") or bpy.data.materials.new(
-        "AXIAL_SLICE_mat"
+    mat = bpy.data.materials.get("1_AXIAL_SLICE_mat") or bpy.data.materials.new(
+        "1_AXIAL_SLICE_mat"
     )
 
     for slot in AxialPlane.material_slots:
@@ -679,10 +671,10 @@ def AddAxialSlice():
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
     SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
-    ImageName = "AXIAL_SLICE.png"
+    ImageName = "1_AXIAL_SLICE.png"
     ImagePath = join(SlicesDir, ImageName)
 
-    # write "AXIAL_SLICE.png" to here ImagePath
+    # write "1_AXIAL_SLICE.png" to here ImagePath
     AxialSliceUpdate(bpy.context.scene)
 
     BlenderImage = bpy.data.images.get(ImageName) or bpy.data.images.load(ImagePath)
@@ -706,10 +698,11 @@ def AddAxialSlice():
         if h.__name__ == "AxialSliceUpdate"
     ]
     post_handlers.append(AxialSliceUpdate)
+    
 
 def AddCoronalSlice():
 
-    name = "CORONAL_SLICE"
+    name = "2_CORONAL_SLICE"
     DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
     Sp, Sz, Origin, Direction, VC = (
         DcmInfo["Spacing"],
@@ -742,8 +735,8 @@ def AddCoronalSlice():
     CoronalPlane.rotation_euler = Euler((pi / 2, 0.0, 0.0), "XYZ")
     CoronalPlane.location = VC
     # Add Material :
-    mat = bpy.data.materials.get("CORONAL_SLICE_mat") or bpy.data.materials.new(
-        "CORONAL_SLICE_mat"
+    mat = bpy.data.materials.get("2_CORONAL_SLICE_mat") or bpy.data.materials.new(
+        "2_CORONAL_SLICE_mat"
     )
 
     for slot in CoronalPlane.material_slots:
@@ -760,10 +753,10 @@ def AddCoronalSlice():
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
     SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
-    ImageName = "CORONAL_SLICE.png"
+    ImageName = "2_CORONAL_SLICE.png"
     ImagePath = join(SlicesDir, ImageName)
 
-    # write "CORONAL_SLICE.png" to here ImagePath
+    # write "2_CORONAL_SLICE.png" to here ImagePath
     CoronalSliceUpdate(bpy.context.scene)
 
     BlenderImage = bpy.data.images.get(ImageName) or bpy.data.images.load(ImagePath)
@@ -790,7 +783,7 @@ def AddCoronalSlice():
 
 def AddSagitalSlice():
 
-    name = "SAGITAL_SLICE"
+    name = "3_SAGITAL_SLICE"
     DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
     Sp, Sz, Origin, Direction, VC = (
         DcmInfo["Spacing"],
@@ -823,8 +816,8 @@ def AddSagitalSlice():
     SagitalPlane.rotation_euler = Euler((pi / 2, 0.0, pi / 2), "XYZ")
     SagitalPlane.location = VC
     # Add Material :
-    mat = bpy.data.materials.get("SAGITAL_SLICE_mat") or bpy.data.materials.new(
-        "SAGITAL_SLICE_mat"
+    mat = bpy.data.materials.get("3_SAGITAL_SLICE_mat") or bpy.data.materials.new(
+        "3_SAGITAL_SLICE_mat"
     )
 
     for slot in SagitalPlane.material_slots:
@@ -841,10 +834,10 @@ def AddSagitalSlice():
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
     SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
-    ImageName = "SAGITAL_SLICE.png"
+    ImageName = "3_SAGITAL_SLICE.png"
     ImagePath = join(SlicesDir, ImageName)
 
-    # write "SAGITAL_SLICE.png" to here ImagePath
+    # write "3_SAGITAL_SLICE.png" to here ImagePath
     SagitalSliceUpdate(bpy.context.scene)
 
     BlenderImage = bpy.data.images.get(ImageName) or bpy.data.images.load(ImagePath)
@@ -1193,7 +1186,7 @@ def CV2_progress_bar(q, iter=100):
         else:
             sleep(0.1)
 
-def progress_bar(pourcentage, Uptxt, Lowtxt="", Title="BDENATAL", Delay=1):
+def progress_bar(pourcentage, Uptxt, Lowtxt="", Title="BDENTAL", Delay=1):
 
     X, Y = WindowWidth, WindowHeight = (500, 100)
     BackGround = np.ones((Y, X, 3), dtype=np.uint8) * 255

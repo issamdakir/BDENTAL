@@ -4,6 +4,7 @@ import numpy as np
 from time import sleep, perf_counter as Tcounter
 from queue import Queue
 from os.path import join, dirname, abspath, exists
+from importlib import reload  
 
 # Blender Imports :
 import bpy
@@ -20,6 +21,10 @@ from bpy.props import (
 import SimpleITK as sitk
 import vtk
 import cv2
+# try :
+#     cv2 = reload(cv2)
+# except ImportError :
+#     pass
 from vtk.util import numpy_support
 from vtk import vtkCommand
 

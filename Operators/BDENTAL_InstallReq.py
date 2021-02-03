@@ -57,36 +57,35 @@ def ReqInternetInstall(path, modules):
 #############################################################
 def ReqInstall(REQ_DICT, REQ_ARCHIVE, REQ_DIR):
     
-    NotFoundPkgs = ImportReq(REQ_DICT)
-    print("1rst check not found modules: ",NotFoundPkgs)
-    if NotFoundPkgs :
-        if exists(REQ_ARCHIVE):
+    Pkgs = list(REQ_DICT.values())
+    
+    if exists(REQ_ARCHIVE):
 
-            shutil.unpack_archive(REQ_ARCHIVE, REQ_DIR)
-            os.remove(REQ_ARCHIVE)
+        shutil.unpack_archive(REQ_ARCHIVE, REQ_DIR)
+        os.remove(REQ_ARCHIVE)
 
-            print("Requirements installed from ARCHIVE!")
+        print("Requirements installed from ARCHIVE!")
+        print("Please Restart Blender")
+        message = ["Required Modules installation completed! ",
+                    "Please Restart Blender"]
+        ShowMessageBox(message=message, icon="COLORSET_03_VEC")
+            
+    else :
+        if isConnected():
+            
+            ReqInternetInstall(path=REQ_DIR, modules=Pkgs)
+
+            ##########################
+            print("requirements Internet installation completed.")
             print("Please Restart Blender")
             message = ["Required Modules installation completed! ",
                         "Please Restart Blender"]
             ShowMessageBox(message=message, icon="COLORSET_03_VEC")
-            
+
         else :
-            if isConnected():
-                
-                ReqInternetInstall(path=REQ_DIR, modules=NotFoundPkgs)
-
-                ##########################
-                print("requirements Internet installation completed.")
-                print("Please Restart Blender")
-                message = ["Required Modules installation completed! ",
-                            "Please Restart Blender"]
-                ShowMessageBox(message=message, icon="COLORSET_03_VEC")
-
-            else :
-                message = ["Please Check Internet Connexion and retry! "]
-                ShowMessageBox(message=message, icon="COLORSET_02_VEC")
-                print(message)
+            message = ["Please Check Internet Connexion and retry! "]
+            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+            print(message)
 
         
 #############################################################
@@ -104,7 +103,7 @@ class BDENTAL_OT_InstallRequirements(bpy.types.Operator):
         REQ_DICT = {
                     "SimpleITK": "SimpleITK==2.0.2",
                     "vtk": "vtk==9.0.1",
-                    "cv2.aruco": "opencv-contrib-python==4.4.0.46",  
+                    "cv2": "opencv-contrib-python==4.4.0.46",  
                     }
         ADDON_DIR = dirname(dirname(abspath(__file__)))
         REQ_DIR = join(ADDON_DIR, "Resources", "Requirements")

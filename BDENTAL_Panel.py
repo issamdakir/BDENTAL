@@ -68,65 +68,67 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                             row.prop(
                                 BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
                             )
+
+                            row = layout.row()
+                            row.operator("bdental.tresh_segment")
                             row = layout.row()
                             row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
-                            if (
-                                context.active_object
-                                and context.active_object.type == "MESH"
-                            ):
-                                obj = context.active_object
-                                if "_SLICE" in obj.name:
-                                    split = layout.split(align=True)
-                                    col = split.column()
-                                    col.label(text=f" {obj.name} location:")
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj,
-                                        "location",
-                                        index=0,
-                                        text="Location X :",
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj,
-                                        "location",
-                                        index=1,
-                                        text="Location Y :",
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj,
-                                        "location",
-                                        index=2,
-                                        text="Location Z :",
-                                    )
+                            # if (
+                            #     context.active_object
+                            #     and context.active_object.type == "MESH"
+                            # ):
+                            #     obj = context.active_object
+                            #     if "_SLICE" in obj.name:
+                            #         split = layout.split(align=True)
+                            #         col = split.column()
+                            #         col.label(text=f" {obj.name} location:")
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj,
+                            #             "location",
+                            #             index=0,
+                            #             text="Location X :",
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj,
+                            #             "location",
+                            #             index=1,
+                            #             text="Location Y :",
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj,
+                            #             "location",
+                            #             index=2,
+                            #             text="Location Z :",
+                            #         )
 
-                                    col = split.column()
-                                    col.label(text=f" {obj.name} rotation:")
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj,
-                                        "rotation_euler",
-                                        index=0,
-                                        text="Angle X :",
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj,
-                                        "rotation_euler",
-                                        index=1,
-                                        text="Angle Y :",
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj,
-                                        "rotation_euler",
-                                        index=2,
-                                        text="Angle Z :",
-                                    )
-                            row = layout.row()
-                            row.operator("bdental.tresh_segment")
+                            #         col = split.column()
+                            #         col.label(text=f" {obj.name} rotation:")
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj,
+                            #             "rotation_euler",
+                            #             index=0,
+                            #             text="Angle X :",
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj,
+                            #             "rotation_euler",
+                            #             index=1,
+                            #             text="Angle Y :",
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj,
+                            #             "rotation_euler",
+                            #             index=2,
+                            #             text="Angle Z :",
+                            #         )
+                            
 
                         else:
                             row = layout.row()
@@ -162,48 +164,50 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                             row.prop(
                                 BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
                             )
-                            row = layout.row()
-                            row.operator("bdental.addslices", icon="EMPTY_AXIS")
-
-                            if (
-                                context.active_object
-                                and context.active_object.type == "MESH"
-                            ):
-                                obj = context.active_object
-                                if "_SLICE" in obj.name:
-                                    split = layout.split(align=True)
-                                    col = split.column()
-                                    col.label(text=f" {obj.name} location:")
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj, "location", index=0, text="Location X :"
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj, "location", index=1, text="Location Y :"
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj, "location", index=2, text="Location Z :"
-                                    )
-
-                                    col = split.column()
-                                    col.label(text=f" {obj.name} rotation:")
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj, "rotation_euler", index=0, text="Angle X :"
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj, "rotation_euler", index=1, text="Angle Y :"
-                                    )
-                                    row = col.row(align=True)
-                                    row.prop(
-                                        obj, "rotation_euler", index=2, text="Angle Z :"
-                                    )
 
                             row = layout.row()
                             row.operator("bdental.tresh_segment")
+                            row = layout.row()
+                            row.operator("bdental.addslices", icon="EMPTY_AXIS")
+
+                            # if (
+                            #     context.active_object
+                            #     and context.active_object.type == "MESH"
+                            # ):
+                            #     obj = context.active_object
+                            #     if "_SLICE" in obj.name:
+                            #         split = layout.split(align=True)
+                            #         col = split.column()
+                            #         col.label(text=f" {obj.name} location:")
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj, "location", index=0, text="Location X :"
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj, "location", index=1, text="Location Y :"
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj, "location", index=2, text="Location Z :"
+                            #         )
+
+                            #         col = split.column()
+                            #         col.label(text=f" {obj.name} rotation:")
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj, "rotation_euler", index=0, text="Angle X :"
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj, "rotation_euler", index=1, text="Angle Y :"
+                            #         )
+                            #         row = col.row(align=True)
+                            #         row.prop(
+                            #             obj, "rotation_euler", index=2, text="Angle Z :"
+                            #         )
+
+                            
                         else:
                             row = layout.row()
                             row.operator(
