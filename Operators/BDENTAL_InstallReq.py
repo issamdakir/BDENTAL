@@ -38,21 +38,37 @@ def ImportReq(REQ_DICT):
 #############################################################
 def ReqInternetInstall(path, modules):
     # Download and install requirement if not AddonPacked version:
-    if sys.platform == 'darwin' :
+    if sys.platform in ['darwin', 'linux'] :
+
         PythonPath = join(sys.base_exec_prefix, "bin", "python3.7m")
-    if sys.platform in ['win32', 'linux'] :
-        PythonPath = sys.executable
-    call(
-        f"{PythonPath} -m ensurepip ",
-        shell=True,
-    )
-    call(
-        f"{PythonPath} -m pip install -U pip ",
-        shell=True,
-    )
-    for module in modules:
-        command = f' {PythonPath} -m pip install {module} --target "{path}" '
-        call(command, shell=True)
+
+        call(
+        f'"{PythonPath}" -m ensurepip ',
+        shell=True)
+
+        call(
+            f'"{PythonPath}" -m pip install -U pip==21.0 ',
+            shell=True)
+
+        for module in modules:
+            command = f' "{PythonPath}" -m pip install {module} --target "{path}" '
+            call(command, shell=True)
+
+    if sys.platform in ['win32'] :
+
+        PythonBin = dirname(sys.executable)
+
+        call(
+            f'cd "{PythonBin}" && ".\\python.exe" -m ensurepip ',
+            shell=True)
+
+        call(
+            f'cd "{PythonBin}" && ".\\python.exe" -m pip install -U pip==21.0 ',
+            shell=True)
+
+        for module in modules:
+            command = f'cd "{PythonBin}" && ".\\python.exe" -m pip install "{module}" --target "{path}" '
+            call(command, shell=True)
 
 #############################################################
 def ReqInstall(REQ_DICT, REQ_ARCHIVE, REQ_DIR):
