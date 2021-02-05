@@ -1,10 +1,10 @@
 # BDENTAL 
 
 #BDENTAL is a Blender add-on for CT Scan and specialy dental CBCT vizualisation.
-#It is first part of an Dental Implant planing add-on.
+#It is first part of a Dental Implant planing add-on.
 
 #Install Instructions.
-#Requirements : (SimpleITK, opencv-python).
+#Requirements : (SimpleITK, vtk, opencv-python).
 #This packages will be automatically installed at Blender Add-on registration step.
 #Ensure you have good internet connecxion before Add-on install.
 #Recommanded Blender version :2.91
@@ -15,3 +15,4 @@
 
 #Workflow Video demo :
 # https://www.youtube.com/watch?v=RW-z9PKRQRo&t=14s
+
