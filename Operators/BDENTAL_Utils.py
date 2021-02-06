@@ -1,6 +1,6 @@
 # Python imports :
 import os, sys, shutil
-from os.path import join, dirname, exists
+from os.path import join, dirname, exists,abspath
 
 from math import degrees, radians, pi
 import numpy as np
@@ -42,7 +42,15 @@ def ShowMessageBox(message=[], title="INFO", icon="INFO"):
 #######################################################################################
 # Load CT Scan functions :
 #######################################################################################
+def AbsPath(P):
+    if P.startswith('//') :
+        P = abspath(bpy.path.abspath(P))
+    return P   
 
+def RelPath(P):
+    if not P.startswith('//') :
+        P = bpy.path.relpath(abspath(P))
+    return P
 ############################
 # Make directory function :
 ############################
@@ -154,8 +162,8 @@ def MoveToCollection(obj, CollName):
 def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    Sp = Spacing = DcmInfo["Spacing"]
-    Sz = Size = DcmInfo["Size"]
+    Sp = Spacing = DcmInfo["RenderSp"]
+    Sz = Size = DcmInfo["RenderSz"]
     Origin = DcmInfo["Origin"]
     Direction = DcmInfo["Direction"]
     TransformMatrix = DcmInfo["TransformMatrix"]
@@ -404,7 +412,7 @@ def Scene_Settings():
 def AxialSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    ImageData = BDENTAL_Props.Nrrd255Path
+    ImageData = AbsPath(BDENTAL_Props.Nrrd255Path)
     Plane = bpy.context.scene.objects.get("1_AXIAL_SLICE")
 
     Condition1 = exists(ImageData)
@@ -412,7 +420,7 @@ def AxialSliceUpdate(scene):
 
     if Plane and Condition1 and Condition2 :
 
-        SlicesDir = BDENTAL_Props.SlicesDir
+        SlicesDir = AbsPath(BDENTAL_Props.SlicesDir)
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
         TransformMatrix = DcmInfo["TransformMatrix"]
         ImagePath = join(SlicesDir, "1_AXIAL_SLICE.png")
@@ -476,7 +484,7 @@ def AxialSliceUpdate(scene):
 def CoronalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    ImageData = BDENTAL_Props.Nrrd255Path
+    ImageData = AbsPath(BDENTAL_Props.Nrrd255Path)
     Plane = bpy.context.scene.objects.get("2_CORONAL_SLICE")
 
     Condition1 = exists(ImageData)
@@ -484,7 +492,7 @@ def CoronalSliceUpdate(scene):
 
     if Plane and Condition1 and Condition2 :
 
-        SlicesDir = BDENTAL_Props.SlicesDir
+        SlicesDir = AbsPath(BDENTAL_Props.SlicesDir)
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
         TransformMatrix = DcmInfo["TransformMatrix"]
         ImagePath = join(SlicesDir, "2_CORONAL_SLICE.png")
@@ -548,7 +556,7 @@ def CoronalSliceUpdate(scene):
 def SagitalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    ImageData = BDENTAL_Props.Nrrd255Path
+    ImageData = AbsPath(BDENTAL_Props.Nrrd255Path)
     Plane = bpy.context.scene.objects.get("3_SAGITAL_SLICE")
 
     Condition1 = exists(ImageData)
@@ -556,7 +564,7 @@ def SagitalSliceUpdate(scene):
 
     if Plane and Condition1 and Condition2 :
 
-        SlicesDir = BDENTAL_Props.SlicesDir
+        SlicesDir = AbsPath(BDENTAL_Props.SlicesDir)
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
         TransformMatrix = DcmInfo["TransformMatrix"]
         ImagePath = join(SlicesDir, "3_SAGITAL_SLICE.png")
@@ -670,7 +678,7 @@ def AddAxialSlice():
     for node in nodes:
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
-    SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
+    SlicesDir = AbsPath(bpy.context.scene.BDENTAL_Props.SlicesDir)
     ImageName = "1_AXIAL_SLICE.png"
     ImagePath = join(SlicesDir, ImageName)
 
@@ -752,7 +760,7 @@ def AddCoronalSlice():
     for node in nodes:
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
-    SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
+    SlicesDir = AbsPath(bpy.context.scene.BDENTAL_Props.SlicesDir)
     ImageName = "2_CORONAL_SLICE.png"
     ImagePath = join(SlicesDir, ImageName)
 
@@ -833,7 +841,7 @@ def AddSagitalSlice():
     for node in nodes:
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
-    SlicesDir = bpy.context.scene.BDENTAL_Props.SlicesDir
+    SlicesDir = AbsPath(bpy.context.scene.BDENTAL_Props.SlicesDir)
     ImageName = "3_SAGITAL_SLICE.png"
     ImagePath = join(SlicesDir, ImageName)
 

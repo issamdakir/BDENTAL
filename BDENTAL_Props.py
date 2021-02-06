@@ -1,4 +1,5 @@
 import bpy
+from os.path import abspath
 
 from bpy.props import (
     StringProperty,
@@ -10,6 +11,7 @@ from bpy.props import (
 )
 
 
+
 class BDENTAL_Props(bpy.types.PropertyGroup):
 
     #####################
@@ -17,7 +19,7 @@ class BDENTAL_Props(bpy.types.PropertyGroup):
     # CT_Scan props :
     #############################################################################################
     #####################
-
+    
     UserProjectDir: StringProperty(
         name="Project Directory Path",
         default="",

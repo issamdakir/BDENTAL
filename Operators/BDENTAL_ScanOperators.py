@@ -112,8 +112,11 @@ def Load_Dicom_funtion(context, q):
     ################################################################################################
 
     BDENTAL_Props = context.scene.BDENTAL_Props
-    UserDcmDir = BDENTAL_Props.UserDcmDir
-    UserProjectDir = BDENTAL_Props.UserProjectDir
+    BDENTAL_Props.UserDcmDir = RelPath(BDENTAL_Props.UserDcmDir)
+    BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
+
+    UserDcmDir = AbsPath(BDENTAL_Props.UserDcmDir)
+    UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
 
     ################################################################################################
 
@@ -212,6 +215,8 @@ def Load_Dicom_funtion(context, q):
         BDENTAL_Props.Wmax = Wmax
 
         DcmInfo = {
+            "RenderSz":Sz,
+            "RenderSp":Sp,
             "PixelType": Image3D.GetPixelIDTypeAsString(),
             "Wmin": Wmin,
             "Wmax": Wmax,
@@ -246,8 +251,7 @@ def Load_Dicom_funtion(context, q):
             DcmInfo[k] = v
             Image3D.SetMetaData(tag, v)
 
-        # Set DcmInfo property :
-        BDENTAL_Props.DcmInfo = str(DcmInfo)
+        
 
         ###################################### debug_02 ##################################
         debug_02 = Tcounter()
@@ -261,12 +265,12 @@ def Load_Dicom_funtion(context, q):
         SlicesDir = join(UserProjectDir, "Slices")
         if not exists(SlicesDir):
             os.makedirs(SlicesDir)
-        BDENTAL_Props.SlicesDir = SlicesDir
+        BDENTAL_Props.SlicesDir = RelPath(SlicesDir)
 
         PngDir = join(UserProjectDir, "PNG")
         if not exists(PngDir):
             os.makedirs(PngDir)
-        BDENTAL_Props.PngDir = PngDir
+        BDENTAL_Props.PngDir = RelPath(PngDir)
 
         PatientName = DcmInfo["PatientName"]
         PatientID = DcmInfo["PatientID"]
@@ -278,7 +282,7 @@ def Load_Dicom_funtion(context, q):
             # NrrdHuPath = join(UserProjectDir, "Image3DHu.nrrd")
             Nrrd255Path = join(UserProjectDir, "BDENTAL_Image3D255.nrrd")
         # BDENTAL_Props.NrrdHuPath = NrrdHuPath
-        BDENTAL_Props.Nrrd255Path = Nrrd255Path
+        BDENTAL_Props.Nrrd255Path = RelPath(Nrrd255Path)
 
         #######################################################################################
         # set IntensityWindowing  :
@@ -317,6 +321,17 @@ def Load_Dicom_funtion(context, q):
 
         #########################################################################################
         # Get slices list :
+        MaxSp = max(Vector(Sp))
+        if MaxSp < 0.25:
+            SampleRatio = round(MaxSp / 0.25, 2)
+            print(SampleRatio)
+            Image3D_255 = ResizeImage(sitkImage=Image3D_255, Ratio=SampleRatio)
+            DcmInfo["RenderSz"] = Image3D_255.GetSize()
+            DcmInfo["RenderSp"] = Image3D_255.GetSpacing()
+            print(Image3D_255.GetSize())
+            print(Image3D_255.GetSpacing())
+
+            
         Array = sitk.GetArrayFromImage(Image3D_255)
         slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
         # slices = [Image3D_255[:, :, i] for i in range(Image3D_255.GetDepth())]
@@ -348,9 +363,11 @@ def Load_Dicom_funtion(context, q):
             BlendFile = f"{Preffix}SCAN.blend"
         else:
             BlendFile = "SCAN.blend"
-        Blendpath = join(BDENTAL_Props.UserProjectDir, BlendFile)
+        Blendpath = join(UserProjectDir, BlendFile)
         bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-
+        
+        # Set DcmInfo property :
+        BDENTAL_Props.DcmInfo = str(DcmInfo)
         #################################### debug_05 ####################################
         debug_05 = Tcounter()
         message = f"Blender project saved to Project directory, done in {debug_05-debug_04}"
@@ -364,7 +381,8 @@ def Load_Dicom_funtion(context, q):
         print(message)
         # q.put(message)
         #############################################################################################
-
+        message = ["DICOM loaded successfully. "]
+        ShowMessageBox(message=message, icon="COLORSET_03_VEC")
     ####### End Load_Dicom_fuction ##############
 
 # BDENTAL CT Scan Series Load :
@@ -380,9 +398,6 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
 
         Load_Dicom_funtion(context, self.q)
 
-        message = ["DICOM loaded successfully. "]
-        ShowMessageBox(message=message, icon="COLORSET_03_VEC")
-
         return {"FINISHED"}
 
 #######################################################################################
@@ -396,8 +411,12 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
     def execute(self, context):
 
         BDENTAL_Props = context.scene.BDENTAL_Props
-        UserImageFile = BDENTAL_Props.UserImageFile
-        UserProjectDir = BDENTAL_Props.UserProjectDir
+        BDENTAL_Props.UserDcmDir = RelPath(BDENTAL_Props.UserDcmDir)
+        BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
+
+        UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
+        UserImageFile = AbsPath(BDENTAL_Props.UserImageFile)
+    
 
         #######################################################################################
         # 1rst check if paths are valid and supported :
@@ -508,6 +527,8 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             BDENTAL_Props.Wmax = Wmax
 
             DcmInfo = {
+                "RenderSz":Sz,
+                "RenderSp":Sp,
                 "PixelType": Image3D.GetPixelIDTypeAsString(),
                 "Wmin": Wmin,
                 "Wmax": Wmax,
@@ -549,16 +570,16 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             SlicesDir = join(UserProjectDir, "Slices")
             if not exists(SlicesDir):
                 os.makedirs(SlicesDir)
-            BDENTAL_Props.SlicesDir = SlicesDir
+            BDENTAL_Props.SlicesDir = RelPath(SlicesDir)
 
             PngDir = join(UserProjectDir, "PNG")
             if not exists(PngDir):
                 os.makedirs(PngDir)
-            BDENTAL_Props.PngDir = PngDir
+            BDENTAL_Props.PngDir = RelPath(PngDir)
                 # NrrdHuPath = join(UserProjectDir, "Image3DHu.nrrd")
             Nrrd255Path = join(UserProjectDir, "BDENTAL_Image3D255.nrrd")
             # BDENTAL_Props.NrrdHuPath = NrrdHuPath
-            BDENTAL_Props.Nrrd255Path = Nrrd255Path
+            BDENTAL_Props.Nrrd255Path = RelPath(Nrrd255Path)
             
             if "BDENTAL_Image3D255.nrrd" in ImgFileName :
                 Image3D_255 = Image3D
@@ -595,6 +616,13 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
 
             #########################################################################################
             # Get slices list :
+            MaxSp = max(Vector(Sp))
+            if MaxSp < 0.25:
+                SampleRatio = round(MaxSp / 0.25, 2)
+                Image3D_255 = ResizeImage(sitkImage=Image3D_255, Ratio=SampleRatio)
+                DcmInfo["RenderSz"] = Image3D_255.GetSize()
+                DcmInfo["RenderSp"] = Image3D_255.GetSpacing()
+            
             Array = sitk.GetArrayFromImage(Image3D_255)
             slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
             # slices = [Image3D_255[:, :, i] for i in range(Image3D_255.GetDepth())]
@@ -614,9 +642,8 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
                 t.join()
             
             BlendFile = "SCAN.blend"
-            Blendpath = join(BDENTAL_Props.UserProjectDir, BlendFile)
+            Blendpath = join(UserProjectDir, BlendFile)
             bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-
             #############################################################################################
             finish = Tcounter()
             print(f"OPEN SCAN FINISHED in {finish-start} second(s)")
@@ -639,10 +666,11 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
         global GpShader
 
         BDENTAL_Props = context.scene.BDENTAL_Props
+        UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
         Wmin = BDENTAL_Props.Wmin
         Wmax = BDENTAL_Props.Wmax
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
-        PngDir = BDENTAL_Props.PngDir
+        PngDir = AbsPath(BDENTAL_Props.PngDir)
         CTVolumeList = [
             obj for obj in context.scene.objects if obj.name.endswith("CTVolume")
         ]
@@ -689,6 +717,8 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
                 newdriver.driver.expression = f"(Treshold-{Wmin})/{Wmax-Wmin}"
 
             BDENTAL_Props.CT_Rendered = True
+            bpy.ops.view3d.view_selected(use_all_regions=False)
+
             PatientName = DcmInfo["PatientName"]
             PatientID = DcmInfo["PatientID"]
             Preffix = PatientName or PatientID
@@ -696,9 +726,9 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
                 BlendFile = f"{Preffix}SCAN.blend"
             else:
                 BlendFile = "SCAN.blend"
-            Blendpath = join(BDENTAL_Props.UserProjectDir, BlendFile)
+            Blendpath = join(UserProjectDir, BlendFile)
+
             bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-            bpy.ops.view3d.view_selected(use_all_regions=False)
 
             return {"FINISHED"}
 
@@ -759,7 +789,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
         Wmin = BDENTAL_Props.Wmin
         Wmax = BDENTAL_Props.Wmax
-        Nrrd255Path = BDENTAL_Props.Nrrd255Path
+        Nrrd255Path = AbsPath(BDENTAL_Props.Nrrd255Path)
         Treshold = BDENTAL_Props.Treshold
         if exists(Nrrd255Path):
             if GpShader == "VGS_Marcos_modified":
@@ -781,12 +811,13 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
 
     def DicomToMesh(self):
         counter_start = Tcounter()
+        self.q.put(["GuessTime", "PROGRESS : Extracting mesh...", "", 0.0, 0.1, 2])
         # Load Infos :
         #########################################################################
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
         # NrrdHuPath = BDENTAL_Props.NrrdHuPath
-        Nrrd255Path = BDENTAL_Props.Nrrd255Path
-        UserProjectDir = BDENTAL_Props.UserProjectDir
+        Nrrd255Path = AbsPath(BDENTAL_Props.Nrrd255Path)
+        UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
         Origin = DcmInfo["Origin"]
         VtkTransform_4x4 = DcmInfo["VtkTransform_4x4"]
@@ -801,7 +832,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         SmoothIterations = SmthIter = 5
 
         ############### step 1 : Reading DICOM #########################
-        self.q.put(["GuessTime", "PROGRESS : Reading DICOM...", "", 0, 0.1, 1])
+        # self.q.put(["GuessTime", "PROGRESS : Reading DICOM...", "", 0, 0.1, 1])
 
         Image3D = sitk.ReadImage(Nrrd255Path)
         Sz = Image3D.GetSize()
@@ -825,7 +856,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         # print(f"step 1 : Read DICOM ({step1-start})")
 
         ############### step 2 : Extracting mesh... #########################
-        self.q.put(["GuessTime", "PROGRESS : Extracting mesh...", "", 0.1, 0.2, 2])
+        # self.q.put(["GuessTime", "PROGRESS : Extracting mesh...", "", 0.0, 0.1, 2])
 
         # print("Extracting mesh...")
         vtkImage = sitkTovtk(sitkImage=Image3D)
@@ -852,8 +883,8 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
                 mesh=Mesh,
                 reduction=Reduction,
                 step="Mesh Reduction",
-                start=0.2,
-                finish=0.5,
+                start=0.1,
+                finish=0.7,
             )
             Mesh = ReductedMesh
             # print(f"Reduced Mesh polygons count : {Mesh.GetNumberOfPolys()} ...")
@@ -872,8 +903,8 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
             mesh=Mesh,
             Iterations=SmthIter,
             step="Mesh Orientation",
-            start=0.5,
-            finish=0.6,
+            start=0.7,
+            finish=0.75,
         )
         step3 = Tcounter()
         # try:
@@ -900,8 +931,8 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
                 "GuessTime",
                 "PROGRESS : exporting mesh stl...",
                 "",
-                0.6,
-                0.7,
+                0.75,
+                0.8,
                 2,
             ]
         )
@@ -920,7 +951,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         # print(f"step 6 : Export mesh ({step6-step5})")
 
         ############### step 7 : Importing mesh to Blender... #########################
-        self.q.put(["GuessTime", "PROGRESS : Importing mesh...", "", 0.7, 0.9, 10])
+        self.q.put(["GuessTime", "PROGRESS : Importing mesh...", "", 0.8, 0.95, 8])
 
         # print("IMPORTING...")
         # import stl to blender scene :
@@ -935,7 +966,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         self.TimingDict["Import mesh"] = step7 - step6
         # print(f"step 7 : Import mesh({step7-step6})")
         ############### step 8 : Add material... #########################
-        self.q.put(["GuessTime", "PROGRESS : Add material...", "", 0.9, 0.95, 2])
+        self.q.put(["GuessTime", "PROGRESS : Add material...", "", 0.95, 0.99, 2])
 
         # print("ADD COLOR MATERIAL")
         mat = bpy.data.materials.get(obj.name) or bpy.data.materials.new(obj.name)
