@@ -51,7 +51,7 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                 row.prop(BDENTAL_Props, "UserDcmDir", text="DICOM Folder")
                 if BDENTAL_Props.UserDcmDir:
 
-                    if BDENTAL_Props.PngDir:
+                    if BDENTAL_Props.CT_Loaded:
                         row = layout.row()
                         row.operator(
                             "bdental.load_dicom_series", icon="COLORSET_03_VEC"
@@ -136,7 +136,7 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                                 "bdental.volume_render", icon="COLORSET_01_VEC"
                             )
 
-                    if not BDENTAL_Props.PngDir:
+                    if not BDENTAL_Props.CT_Loaded:
                         row = layout.row()
                         row.operator(
                             "bdental.load_dicom_series", icon="COLORSET_01_VEC"
@@ -148,7 +148,7 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                 row.prop(BDENTAL_Props, "UserImageFile", text="File Path")
 
                 if BDENTAL_Props.UserImageFile:
-                    if BDENTAL_Props.PngDir:
+                    if BDENTAL_Props.CT_Loaded:
                         row = layout.row()
                         row.operator(
                             "bdental.load_3dimage_file", icon="COLORSET_03_VEC"
@@ -214,7 +214,7 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                                 "bdental.volume_render", icon="COLORSET_01_VEC"
                             )
 
-                    if not BDENTAL_Props.PngDir:
+                    if not BDENTAL_Props.CT_Loaded:
                         row = layout.row()
                         row.operator(
                             "bdental.load_3dimage_file", icon="COLORSET_01_VEC"

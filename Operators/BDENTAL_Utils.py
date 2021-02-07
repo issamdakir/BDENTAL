@@ -159,7 +159,7 @@ def MoveToCollection(obj, CollName):
             if Coll is not NewColl:
                 Coll.objects.unlink(obj)
 
-def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
+def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
     Sp = Spacing = DcmInfo["RenderSp"]
@@ -167,10 +167,12 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     Origin = DcmInfo["Origin"]
     Direction = DcmInfo["Direction"]
     TransformMatrix = DcmInfo["TransformMatrix"]
+    Preffix = DcmInfo["PatientID"]
     DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
     Offset = Sp[2]
-    ImagesList = sorted(os.listdir(PngDir))
-
+    # ImagesList = sorted(os.listdir(PngDir))
+    ImagesNamesList = sorted([img.name for img in bpy.data.images if img.name.startswith(Preffix)])
+    ImagesList = [bpy.data.images[Name] for Name in ImagesNamesList]
     #################################################################################
     Start = Tcounter()
     #################################################################################
@@ -205,11 +207,11 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
                 r3d.update()
 
     ################### Load all PNG images : ###############################
-    for ImagePNG in ImagesList:
-        image_path = join(PngDir, ImagePNG)
-        bpy.data.images.load(image_path)
+    # for ImagePNG in ImagesList:
+    #     image_path = join(PngDir, ImagePNG)
+    #     bpy.data.images.load(image_path)
 
-    bpy.ops.file.pack_all()
+    # bpy.ops.file.pack_all()
 
     ###############################################################################################
     # Add Planes with textured material :
@@ -217,7 +219,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
     PlansList = []
     ############################# START LOOP ##################################
 
-    for i, ImagePNG in enumerate(ImagesList):
+    for i, ImageData in enumerate(ImagesList):
         # # Add Plane :
         # ##########################################
         Preffix = "PLANE_"
@@ -253,7 +255,7 @@ def VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile):
             if node.type != "OUTPUT_MATERIAL":
                 nodes.remove(node)
 
-        ImageData = bpy.data.images.get(ImagePNG)
+        # ImageData = bpy.data.images.get(ImagePNG)
         TextureCoord = AddNode(
             nodes, type="ShaderNodeTexCoord", name="TextureCoord"
         )

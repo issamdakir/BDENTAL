@@ -41,8 +41,8 @@ import sys, os, bpy
 from importlib import import_module
 from os.path import dirname, join, realpath, abspath, exists
 
-if sys.platform == 'win32' :
-    sys.stdout.reconfigure(encoding="cp65001")  # activate unicode characters in windows CLI
+
+sys.stdout.reconfigure(encoding="cp65001")  # activate unicode characters in windows CLI
 
 #############################################################
 def ImportReq(REQ_DICT):

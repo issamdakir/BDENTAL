@@ -272,15 +272,12 @@ def Load_Dicom_funtion(context, q):
             os.makedirs(PngDir)
         BDENTAL_Props.PngDir = RelPath(PngDir)
 
-        PatientName = DcmInfo["PatientName"]
         PatientID = DcmInfo["PatientID"]
-        Preffix = PatientName or PatientID
-        if Preffix:
-            # NrrdHuPath = join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
-            Nrrd255Path = join(UserProjectDir, f"{Preffix}_BDENTAL_Image3D255.nrrd")
-        else:
-            # NrrdHuPath = join(UserProjectDir, "Image3DHu.nrrd")
-            Nrrd255Path = join(UserProjectDir, "BDENTAL_Image3D255.nrrd")
+        Preffix = PatientID or ""
+        
+        # NrrdHuPath = join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
+        Nrrd255Path = join(UserProjectDir, f"{Preffix}_BDENTAL_Image3D255.nrrd")
+       
         # BDENTAL_Props.NrrdHuPath = NrrdHuPath
         BDENTAL_Props.Nrrd255Path = RelPath(Nrrd255Path)
 
@@ -313,11 +310,14 @@ def Load_Dicom_funtion(context, q):
         #############################################################################################
         # MultiThreading PNG Writer:
         #########################################################################################
-        def Image3DToPNG(i, slices, PngDir):
+        def Image3DToPNG(i, slices, PngDir, Preffix):
             img_Slice = slices[i]
-            img_Name = "img_{0:04d}.png".format(i)
-            img_Out = join(PngDir, img_Name)
-            cv2.imwrite(img_Out, img_Slice)
+            img_Name = f"{Preffix}_img_{i:04}.png"
+            image_path = join(PngDir, img_Name)
+            cv2.imwrite(image_path, img_Slice)
+            image = bpy.data.images.load(image_path)
+            image.pack()
+            # print(f"{img_Name} was processed...")
 
         #########################################################################################
         # Get slices list :
@@ -335,10 +335,11 @@ def Load_Dicom_funtion(context, q):
         Array = sitk.GetArrayFromImage(Image3D_255)
         slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
         # slices = [Image3D_255[:, :, i] for i in range(Image3D_255.GetDepth())]
+        
         threads = [
             threading.Thread(
                 target=Image3DToPNG,
-                args=[i, slices, PngDir],
+                args=[i, slices, PngDir, Preffix],
                 daemon=True,
             )
             for i in range(len(slices))
@@ -350,6 +351,9 @@ def Load_Dicom_funtion(context, q):
         for t in threads:
             t.join()
 
+        # os.removedirs(PngDir)
+        shutil.rmtree(PngDir)
+        BDENTAL_Props.PngDir = ""
         #################################### debug_04 ####################################
         debug_04 = Tcounter()
         message = (
@@ -359,10 +363,9 @@ def Load_Dicom_funtion(context, q):
         # q.put("PNG images saved...")
         ##################################################################################
 
-        if Preffix:
-            BlendFile = f"{Preffix}SCAN.blend"
-        else:
-            BlendFile = "SCAN.blend"
+        
+        BlendFile = f"{Preffix}SCAN.blend"
+        
         Blendpath = join(UserProjectDir, BlendFile)
         bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
         
@@ -397,6 +400,8 @@ class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
     def execute(self, context):
 
         Load_Dicom_funtion(context, self.q)
+        BDENTAL_Props = context.scene.BDENTAL_Props
+        BDENTAL_Props.CT_Loaded = True
 
         return {"FINISHED"}
 
@@ -607,11 +612,13 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             #############################################################################################
             # MultiThreading PNG Writer:
             #########################################################################################
-            def Image3DToPNG(i, slices, PngDir):
+            def Image3DToPNG(i, slices, PngDir, Preffix):
                 img_Slice = slices[i]
-                img_Name = "img_{0:04d}.png".format(i)
-                img_Out = join(PngDir, img_Name)
-                cv2.imwrite(img_Out, img_Slice)
+                img_Name = f"{Preffix}_img_{i:04}.png"
+                image_path = join(PngDir, img_Name)
+                cv2.imwrite(image_path, img_Slice)
+                image = bpy.data.images.load(image_path)
+                image.pack()
                 print(f"{img_Name} was processed...")
 
             #########################################################################################
@@ -626,10 +633,12 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
             Array = sitk.GetArrayFromImage(Image3D_255)
             slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
             # slices = [Image3D_255[:, :, i] for i in range(Image3D_255.GetDepth())]
+            PatientID = DcmInfo["PatientID"]
+            Preffix = PatientID
             threads = [
                 threading.Thread(
                     target=Image3DToPNG,
-                    args=[i, slices, PngDir],
+                    args=[i, slices, PngDir, Preffix],
                     daemon=True,
                 )
                 for i in range(len(slices))
@@ -640,6 +649,10 @@ class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
 
             for t in threads:
                 t.join()
+            # os.removedirs(PngDir)
+            shutil.rmtree(PngDir)
+            BDENTAL_Props.PngDir = ""
+            BDENTAL_Props.CT_Loaded = True
             
             BlendFile = "SCAN.blend"
             Blendpath = join(UserProjectDir, BlendFile)
@@ -670,14 +683,14 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
         Wmin = BDENTAL_Props.Wmin
         Wmax = BDENTAL_Props.Wmax
         DcmInfo = eval(BDENTAL_Props.DcmInfo)
-        PngDir = AbsPath(BDENTAL_Props.PngDir)
+        # PngDir = AbsPath(BDENTAL_Props.PngDir)
         CTVolumeList = [
             obj for obj in context.scene.objects if obj.name.endswith("CTVolume")
         ]
 
         if CTVolumeList == []:
 
-            VolumeRender(DcmInfo, PngDir, GpShader, ShadersBlendFile)
+            VolumeRender(DcmInfo, GpShader, ShadersBlendFile)
             scn = bpy.context.scene
             scn.render.engine = "BLENDER_EEVEE"
             BDENTAL_Props.GroupNodeName = GpShader
