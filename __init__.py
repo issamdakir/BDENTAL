@@ -42,6 +42,7 @@ from importlib import import_module
 from os.path import dirname, join, realpath, abspath, exists
 
 
+
 sys.stdout.reconfigure(encoding="cp65001")  # activate unicode characters in windows CLI
 
 #############################################################
@@ -54,6 +55,7 @@ def ImportReq(REQ_DICT):
             Pkgs.append(pkg)
 
     return Pkgs
+    
 
 ###################################################
 REQ_DICT = {
@@ -111,7 +113,7 @@ else :
             module.register()
         for cl in init_classes:
             bpy.utils.register_class(cl)
-
+        
 
     def unregister():
         for cl in init_classes:

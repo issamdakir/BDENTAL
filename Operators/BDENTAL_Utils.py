@@ -7,6 +7,7 @@ import numpy as np
 from time import sleep, perf_counter as Tcounter
 from queue import Queue
 from importlib import reload  
+from bpy.app.handlers import persistent
 
 
 # Blender Imports :
@@ -42,6 +43,18 @@ def ShowMessageBox(message=[], title="INFO", icon="INFO"):
 #######################################################################################
 # Load CT Scan functions :
 #######################################################################################
+def CtxOverride(context):
+    Override = context.copy()
+    area3D = [area for area in context.screen.areas if area.type == "VIEW_3D"][0]
+    space3D = [space for space in area3D.spaces if space.type == "VIEW_3D"][0]
+    region3D = [reg for reg in area3D.regions if reg.type == "WINDOW"][0]
+    Override["area"], Override["space_data"], Override["region"] = (
+        area3D,
+        space3D,
+        region3D,
+    )
+    return Override, area3D, space3D
+
 def AbsPath(P):
     if P.startswith('//') :
         P = abspath(bpy.path.abspath(P))
@@ -159,15 +172,44 @@ def MoveToCollection(obj, CollName):
             if Coll is not NewColl:
                 Coll.objects.unlink(obj)
 
+@persistent
+def BDENTAL_TresholdUpdate(scene):
+    BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+    GpShader = BDENTAL_Props.GroupNodeName
+    
+    CtVolumeList = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume") ]
+    if CtVolumeList :
+        Active_Obj = bpy.context.view_layer.objects.active
+        if Active_Obj and Active_Obj in CtVolumeList :
+            print("Treshold Update trigred!")
+            Vol = Active_Obj
+            Preffix = Vol.name[:4]
+            GpNode = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
+
+            if GpShader == "VGS_Marcos_modified":
+                Low_Treshold = GpNode.nodes["Low_Treshold"].outputs[0]
+                BDENTAL_Props.Treshold = Low_Treshold.default_value
+            if GpShader == "VGS_Dakir_01":
+                DcmInfo = eval(BDENTAL_Props.DcmInfo)
+                Wmin = DcmInfo["Wmin"]
+                Wmax = DcmInfo["Wmax"]
+                treshramp = GpNode.nodes["TresholdRamp"].color_ramp.elements[0]
+                BDENTAL_Props.Treshold = treshramp.default_value*(Wmax-Wmin) + Wmin 
+            
+
+
 def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+
+    CtVolumeList = [obj for obj in bpy.context.scene.objects if "BDENTAL_CTVolume_" in obj.name]
+    Preffix = DcmInfo["Preffix"]
+
     Sp = Spacing = DcmInfo["RenderSp"]
     Sz = Size = DcmInfo["RenderSz"]
     Origin = DcmInfo["Origin"]
     Direction = DcmInfo["Direction"]
     TransformMatrix = DcmInfo["TransformMatrix"]
-    Preffix = DcmInfo["PatientID"]
     DimX, DimY, DimZ = (Sz[0] * Sp[0], Sz[1] * Sp[1], Sz[2] * Sp[2])
     Offset = Sp[2]
     # ImagesList = sorted(os.listdir(PngDir))
@@ -222,30 +264,17 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
     for i, ImageData in enumerate(ImagesList):
         # # Add Plane :
         # ##########################################
-        Preffix = "PLANE_"
-        Name = f"{Preffix}{i}"
+        Name = f"{Preffix}_PLANE_{i}"
         mesh = AddPlaneMesh(DimX, DimY, Name)
         CollName = "CT Voxel"
 
         obj = AddPlaneObject(Name, mesh, CollName)
         obj.location[2] = i * Offset
         PlansList.append(obj)
-        ##########################################
-        # # Add Plane :
-        # Preffix = "PLANE_"
-        # Name = f"{Preffix}{i}"
-        # CollName = "CT Voxel"
-        # bpy.ops.mesh.primitive_plane_add()
-        # obj = bpy.context.active_object
-        # obj.dimensions = (DimX, DimY, 0)
-        # obj.name = Name
-        # obj.data.name = Name
-        # obj.location[2] = i * Offset
-        # MoveToCollection(obj, CollName)
-        # PlansList.append(obj)
+        
         ##########################################
         # Add Material :
-        mat = bpy.data.materials.new(f"Voxelmat_{i}")
+        mat = bpy.data.materials.new(f"{Preffix}_Voxelmat_{i}")
         mat.use_nodes = True
         node_tree = mat.node_tree
         nodes = node_tree.nodes
@@ -270,7 +299,7 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
         links.new(TextureCoord.outputs[0], ImageTexture.inputs[0])
 
         # Load VGS Group Node :
-        VGS = bpy.data.node_groups.get(GpShader)
+        VGS = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
         if not VGS:
             filepath = join(ShadersBlendFile, "NodeTree", GpShader)
             directory = join(ShadersBlendFile, "NodeTree")
@@ -279,6 +308,8 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
                 filepath=filepath, filename=filename, directory=directory
             )
             VGS = bpy.data.node_groups.get(GpShader)
+            VGS.name = f"{Preffix}_{GpShader}"
+            VGS = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
 
         GroupNode = nodes.new("ShaderNodeGroup")
         GroupNode.node_tree = VGS
@@ -307,35 +338,29 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
     bpy.ops.object.join()
 
     Voxel = bpy.context.object
-    PatientName = DcmInfo["PatientName"]
-    PatientID = DcmInfo["PatientID"]
-    Preffix = PatientName or PatientID
-    # if Preffix:
-    #     Voxel.name = f"{Preffix}_CTVolume"
-    # else:
-    #     Voxel.name = "CTVolume"
-    Voxel.name = "CTVolume"
+    
+    Voxel.name = f"{Preffix}_CTVolume"
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
     Voxel.matrix_world = TransformMatrix
-
-    for area in bpy.context.screen.areas:
-        if area.type == "VIEW_3D":
-            area3D = area
-            for space in area3D.spaces:
-                if space.type == "VIEW_3D":
-                    space3D = space
-                    break
-            for region in area3D.regions:
-                if region.type == "WINDOW":
-                    r3D = region
-                    break
-    override = bpy.context.copy()
-    override["area"] = area3D
-    override["space_data"] = space3D
-    override["region"] = r3D
-    bpy.ops.view3d.view_selected(override, use_all_regions=False)
+    Override, area3D, space3D = CtxOverride(bpy.context)
+    # for area in bpy.context.screen.areas:
+    #     if area.type == "VIEW_3D":
+    #         area3D = area
+    #         for space in area3D.spaces:
+    #             if space.type == "VIEW_3D":
+    #                 space3D = space
+    #                 break
+    #         for region in area3D.regions:
+    #             if region.type == "WINDOW":
+    #                 r3D = region
+    #                 break
+    # override = bpy.context.copy()
+    # override["area"] = area3D
+    # override["space_data"] = space3D
+    # override["region"] = r3D
+    bpy.ops.view3d.view_selected(Override, use_all_regions=False)
 
     for scr in bpy.data.screens:
         # if scr.name in ["Layout", "Scripting", "Shading"]:
@@ -357,38 +382,39 @@ def Scene_Settings():
     WColor = WorldNodes["Background"].inputs[0].default_value = (0.6, 0.6, 0.6, 0.6)
     WStrength = WorldNodes["Background"].inputs[1].default_value = 1.5
 
+    Override, area3D, space3D = CtxOverride(bpy.context)
     # scene shading lights
-    for scr in bpy.data.screens:
-        for area in [ar for ar in scr.areas if ar.type == "VIEW_3D"]:
-            for space in [sp for sp in area.spaces if sp.type == "VIEW_3D"]:
-                # 3DView Shading Methode : in {'WIREFRAME', 'SOLID', 'MATERIAL', 'RENDERED'}
-                space.shading.type = "MATERIAL"
+    
+    # 3DView Shading Methode : in {'WIREFRAME', 'SOLID', 'MATERIAL', 'RENDERED'}
+    space3D.shading.type = "MATERIAL"
 
-                # 'Material' Shading Light method :
-                space.shading.use_scene_lights = True
-                space.shading.use_scene_world = False
+    # 'Material' Shading Light method :
+    space3D.shading.use_scene_lights = True
+    space3D.shading.use_scene_world = False
 
-                # 'RENDERED' Shading Light method :
-                space.shading.use_scene_lights_render = False
-                space.shading.use_scene_world_render = True
+    # 'RENDERED' Shading Light method :
+    space3D.shading.use_scene_lights_render = False
+    space3D.shading.use_scene_world_render = True
 
-                space.shading.studio_light = "forest.exr"
-                space.shading.studiolight_rotate_z = 0
-                space.shading.studiolight_intensity = 1.5
-                space.shading.studiolight_background_alpha = 0.0
-                space.shading.studiolight_background_blur = 0.0
+    space3D.shading.studio_light = "forest.exr"
+    space3D.shading.studiolight_rotate_z = 0
+    space3D.shading.studiolight_intensity = 1.5
+    space3D.shading.studiolight_background_alpha = 0.0
+    space3D.shading.studiolight_background_blur = 0.0
 
-                space.shading.render_pass = "COMBINED"
+    space3D.shading.render_pass = "COMBINED"
 
-                space.shading.type = "SOLID"
-                space.shading.color_type = "TEXTURE"
-                # space.shading.light = "MATCAP"
-                # space.shading.studio_light = "basic_side.exr"
-                bpy.context.space_data.shading.light = "STUDIO"
-                bpy.context.space_data.shading.studio_light = "outdoor.sl"
-                bpy.context.space_data.shading.show_cavity = True
-                bpy.context.space_data.shading.curvature_ridge_factor = 0.5
-                bpy.context.space_data.shading.curvature_valley_factor = 0.5
+    space3D.shading.type = "SOLID"
+
+    # Override, area3D, space3D = CtxOverride(bpy.context)
+    space3D.shading.color_type = "TEXTURE"
+    # space.shading.light = "MATCAP"
+    # space.shading.studio_light = "basic_side.exr"
+    space3D.shading.light = "STUDIO"
+    space3D.shading.studio_light = "outdoor.sl"
+    space3D.shading.show_cavity = True
+    space3D.shading.curvature_ridge_factor = 0.5
+    space3D.shading.curvature_valley_factor = 0.5
 
     scn = bpy.context.scene
     scn.render.engine = "BLENDER_EEVEE"
@@ -414,18 +440,23 @@ def Scene_Settings():
 def AxialSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    ImageData = AbsPath(BDENTAL_Props.Nrrd255Path)
-    Plane = bpy.context.scene.objects.get("1_AXIAL_SLICE")
+    
+    Planes = [obj for obj in bpy.context.scene.objects if "_AXIAL_SLICE" in obj.name]
+    Plane = bpy.context.view_layer.objects.active
+    Preffix = Plane.name[2:6]
+    DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+    DcmInfo = DcmInfoDict[Preffix]
+    ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
     Condition1 = exists(ImageData)
-    Condition2 = (bpy.context.view_layer.objects.active == Plane)
+    Condition2 = bpy.context.view_layer.objects.active in Planes
 
-    if Plane and Condition1 and Condition2 :
+    if Planes and Condition1 and Condition2 :
 
-        SlicesDir = AbsPath(BDENTAL_Props.SlicesDir)
-        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        SlicesDir = AbsPath(DcmInfo["SlicesDir"])
         TransformMatrix = DcmInfo["TransformMatrix"]
-        ImagePath = join(SlicesDir, "1_AXIAL_SLICE.png")
+        ImageName = f"{Plane.name}.png"
+        ImagePath = join(SlicesDir, ImageName)
 
         #########################################
         #########################################
@@ -477,27 +508,32 @@ def AxialSliceUpdate(scene):
         cv2.imwrite(ImagePath, Flipped_Array)
         #############################################
         # Update Blender Image data :
-        BlenderImage = bpy.data.images.get("1_AXIAL_SLICE.png")
+        BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
         if not BlenderImage:
             bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get("1_AXIAL_SLICE.png")
+            BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
         BlenderImage.reload()
 
 def CoronalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    ImageData = AbsPath(BDENTAL_Props.Nrrd255Path)
-    Plane = bpy.context.scene.objects.get("2_CORONAL_SLICE")
+    
+    Planes = [obj for obj in bpy.context.scene.objects if "_CORONAL_SLICE" in obj.name]
+    Plane = bpy.context.view_layer.objects.active
+    Preffix = Plane.name[2:6]
+    DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+    DcmInfo = DcmInfoDict[Preffix]
+    ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
     Condition1 = exists(ImageData)
-    Condition2 = (bpy.context.view_layer.objects.active == Plane)
+    Condition2 = bpy.context.view_layer.objects.active in Planes
 
-    if Plane and Condition1 and Condition2 :
+    if Planes and Condition1 and Condition2 :
 
-        SlicesDir = AbsPath(BDENTAL_Props.SlicesDir)
-        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        SlicesDir = AbsPath(DcmInfo["SlicesDir"])
         TransformMatrix = DcmInfo["TransformMatrix"]
-        ImagePath = join(SlicesDir, "2_CORONAL_SLICE.png")
+        ImageName = f"{Plane.name}.png"
+        ImagePath = join(SlicesDir, ImageName)
 
         #########################################
         #########################################
@@ -549,27 +585,32 @@ def CoronalSliceUpdate(scene):
         cv2.imwrite(ImagePath, Flipped_Array)
         #############################################
         # Update Blender Image data :
-        BlenderImage = bpy.data.images.get("2_CORONAL_SLICE.png")
+        BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
         if not BlenderImage:
             bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get("2_CORONAL_SLICE.png")
+            BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
         BlenderImage.reload()
 
 def SagitalSliceUpdate(scene):
 
     BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-    ImageData = AbsPath(BDENTAL_Props.Nrrd255Path)
-    Plane = bpy.context.scene.objects.get("3_SAGITAL_SLICE")
+    
+    Planes = [obj for obj in bpy.context.scene.objects if "_SAGITAL_SLICE" in obj.name]
+    Plane = bpy.context.view_layer.objects.active
+    Preffix = Plane.name[2:6]
+    DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+    DcmInfo = DcmInfoDict[Preffix]
+    ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
     Condition1 = exists(ImageData)
-    Condition2 = (bpy.context.view_layer.objects.active == Plane)
+    Condition2 = bpy.context.view_layer.objects.active in Planes
 
-    if Plane and Condition1 and Condition2 :
+    if Planes and Condition1 and Condition2 :
 
-        SlicesDir = AbsPath(BDENTAL_Props.SlicesDir)
-        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        SlicesDir = AbsPath(DcmInfo["SlicesDir"])
         TransformMatrix = DcmInfo["TransformMatrix"]
-        ImagePath = join(SlicesDir, "3_SAGITAL_SLICE.png")
+        ImageName = f"{Plane.name}.png"
+        ImagePath = join(SlicesDir, ImageName)
 
         #########################################
         #########################################
@@ -622,17 +663,16 @@ def SagitalSliceUpdate(scene):
         cv2.imwrite(ImagePath, Flipped_Array)
         #############################################
         # Update Blender Image data :
-        BlenderImage = bpy.data.images.get("3_SAGITAL_SLICE.png")
+        BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
         if not BlenderImage:
             bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get("3_SAGITAL_SLICE.png")
+            BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
         BlenderImage.reload()
 
 ####################################################################
-def AddAxialSlice():
-
-    name = "1_AXIAL_SLICE"
-    DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
+def AddAxialSlice(Preffix, DcmInfo):
+    
+    name = f"1_{Preffix}_AXIAL_SLICE"
     Sp, Sz, Origin, Direction, VC = (
         DcmInfo["Spacing"],
         DcmInfo["Size"],
@@ -663,8 +703,8 @@ def AddAxialSlice():
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     AxialPlane.location = VC
     # Add Material :
-    mat = bpy.data.materials.get("1_AXIAL_SLICE_mat") or bpy.data.materials.new(
-        "1_AXIAL_SLICE_mat"
+    mat = bpy.data.materials.get(f"{name}_mat") or bpy.data.materials.new(
+        f"{name}_mat"
     )
 
     for slot in AxialPlane.material_slots:
@@ -681,7 +721,7 @@ def AddAxialSlice():
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
     SlicesDir = AbsPath(bpy.context.scene.BDENTAL_Props.SlicesDir)
-    ImageName = "1_AXIAL_SLICE.png"
+    ImageName = f"{name}.png"
     ImagePath = join(SlicesDir, ImageName)
 
     # write "1_AXIAL_SLICE.png" to here ImagePath
@@ -710,10 +750,9 @@ def AddAxialSlice():
     post_handlers.append(AxialSliceUpdate)
     
 
-def AddCoronalSlice():
+def AddCoronalSlice(Preffix, DcmInfo):
 
-    name = "2_CORONAL_SLICE"
-    DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
+    name = f"2_{Preffix}_CORONAL_SLICE"
     Sp, Sz, Origin, Direction, VC = (
         DcmInfo["Spacing"],
         DcmInfo["Size"],
@@ -745,8 +784,8 @@ def AddCoronalSlice():
     CoronalPlane.rotation_euler = Euler((pi / 2, 0.0, 0.0), "XYZ")
     CoronalPlane.location = VC
     # Add Material :
-    mat = bpy.data.materials.get("2_CORONAL_SLICE_mat") or bpy.data.materials.new(
-        "2_CORONAL_SLICE_mat"
+    mat = bpy.data.materials.get(f"{name}_mat") or bpy.data.materials.new(
+        f"{name}_mat"
     )
 
     for slot in CoronalPlane.material_slots:
@@ -763,7 +802,7 @@ def AddCoronalSlice():
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
     SlicesDir = AbsPath(bpy.context.scene.BDENTAL_Props.SlicesDir)
-    ImageName = "2_CORONAL_SLICE.png"
+    ImageName = f"{name}.png"
     ImagePath = join(SlicesDir, ImageName)
 
     # write "2_CORONAL_SLICE.png" to here ImagePath
@@ -791,10 +830,9 @@ def AddCoronalSlice():
     ]
     post_handlers.append(CoronalSliceUpdate)
 
-def AddSagitalSlice():
+def AddSagitalSlice(Preffix, DcmInfo):
 
-    name = "3_SAGITAL_SLICE"
-    DcmInfo = eval(bpy.context.scene.BDENTAL_Props.DcmInfo)
+    name = f"3_{Preffix}_SAGITAL_SLICE"
     Sp, Sz, Origin, Direction, VC = (
         DcmInfo["Spacing"],
         DcmInfo["Size"],
@@ -826,8 +864,8 @@ def AddSagitalSlice():
     SagitalPlane.rotation_euler = Euler((pi / 2, 0.0, pi / 2), "XYZ")
     SagitalPlane.location = VC
     # Add Material :
-    mat = bpy.data.materials.get("3_SAGITAL_SLICE_mat") or bpy.data.materials.new(
-        "3_SAGITAL_SLICE_mat"
+    mat = bpy.data.materials.get(f"{name}_mat") or bpy.data.materials.new(
+        f"{name}_mat"
     )
 
     for slot in SagitalPlane.material_slots:
@@ -844,7 +882,7 @@ def AddSagitalSlice():
         if node.type != "OUTPUT_MATERIAL":
             nodes.remove(node)
     SlicesDir = AbsPath(bpy.context.scene.BDENTAL_Props.SlicesDir)
-    ImageName = "3_SAGITAL_SLICE.png"
+    ImageName = f"{name}.png"
     ImagePath = join(SlicesDir, ImageName)
 
     # write "3_SAGITAL_SLICE.png" to here ImagePath

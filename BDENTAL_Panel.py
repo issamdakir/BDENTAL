@@ -10,7 +10,7 @@ yellow_icon = "COLORSET_09_VEC"
 yellow_point = "KEYTYPE_KEYFRAME_VEC"
 blue_point = "KEYTYPE_BREAKDOWN_VEC"
 
-
+Wmin, Wmax  = -400, 3000
 ####################################################################
 # // CUTTING TOOLS PANEL //
 ####################################################################
@@ -30,7 +30,7 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
         BDENTAL_Props = context.scene.BDENTAL_Props
         GroupNodeName = BDENTAL_Props.GroupNodeName
         VGS = bpy.data.node_groups.get(GroupNodeName)
-        Wmin, Wmax = BDENTAL_Props.Wmin, BDENTAL_Props.Wmax
+        
 
         # Draw Addon UI :
 
@@ -45,102 +45,33 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
             row.prop(BDENTAL_Props, "DataType")
 
             if BDENTAL_Props.DataType == "DICOM Series":
-                # row = layout.row()
-                # row.label(text="DICOM Series Folder :")
                 row = layout.row()
                 row.prop(BDENTAL_Props, "UserDcmDir", text="DICOM Folder")
                 if BDENTAL_Props.UserDcmDir:
-
-                    if BDENTAL_Props.CT_Loaded:
+                    if BDENTAL_Props.CT_Rendered:
                         row = layout.row()
                         row.operator(
-                            "bdental.load_dicom_series", icon="COLORSET_03_VEC"
+                            "bdental.volume_render", icon="COLORSET_03_VEC"
                         )
-                        if BDENTAL_Props.CT_Rendered:
-                            row = layout.row()
-                            row.operator(
-                                "bdental.volume_render", icon="COLORSET_03_VEC"
-                            )
+                        
+                        row = layout.row()
+                        row.label(text=f"Threshold {Wmin} to {Wmax} HU:")
+                        row = layout.row()
+                        row.prop(
+                            BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
+                        )
 
-                            row = layout.row()
-                            row.label(text=f"Threshold {Wmin} to {Wmax} HU:")
-                            row = layout.row()
-                            row.prop(
-                                BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
-                            )
+                        row = layout.row()
+                        row.operator("bdental.tresh_segment")
+                        row = layout.row()
+                        row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
-                            row = layout.row()
-                            row.operator("bdental.tresh_segment")
-                            row = layout.row()
-                            row.operator("bdental.addslices", icon="EMPTY_AXIS")
-
-                            # if (
-                            #     context.active_object
-                            #     and context.active_object.type == "MESH"
-                            # ):
-                            #     obj = context.active_object
-                            #     if "_SLICE" in obj.name:
-                            #         split = layout.split(align=True)
-                            #         col = split.column()
-                            #         col.label(text=f" {obj.name} location:")
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj,
-                            #             "location",
-                            #             index=0,
-                            #             text="Location X :",
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj,
-                            #             "location",
-                            #             index=1,
-                            #             text="Location Y :",
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj,
-                            #             "location",
-                            #             index=2,
-                            #             text="Location Z :",
-                            #         )
-
-                            #         col = split.column()
-                            #         col.label(text=f" {obj.name} rotation:")
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj,
-                            #             "rotation_euler",
-                            #             index=0,
-                            #             text="Angle X :",
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj,
-                            #             "rotation_euler",
-                            #             index=1,
-                            #             text="Angle Y :",
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj,
-                            #             "rotation_euler",
-                            #             index=2,
-                            #             text="Angle Z :",
-                            #         )
-                            
-
-                        else:
-                            row = layout.row()
-                            row.operator(
-                                "bdental.volume_render", icon="COLORSET_01_VEC"
-                            )
-
-                    if not BDENTAL_Props.CT_Loaded:
+                    if not BDENTAL_Props.CT_Rendered:
                         row = layout.row()
                         row.operator(
-                            "bdental.load_dicom_series", icon="COLORSET_01_VEC"
+                            "bdental.volume_render", icon="COLORSET_01_VEC"
                         )
+
 
             if BDENTAL_Props.DataType == "3D Image File":
 
@@ -148,77 +79,33 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                 row.prop(BDENTAL_Props, "UserImageFile", text="File Path")
 
                 if BDENTAL_Props.UserImageFile:
-                    if BDENTAL_Props.CT_Loaded:
+                    
+                    if BDENTAL_Props.CT_Rendered:
                         row = layout.row()
                         row.operator(
-                            "bdental.load_3dimage_file", icon="COLORSET_03_VEC"
+                            "bdental.volume_render", icon="COLORSET_03_VEC"
                         )
-                        if BDENTAL_Props.CT_Rendered:
-                            row = layout.row()
-                            row.operator(
-                                "bdental.volume_render", icon="COLORSET_03_VEC"
-                            )
-                            row = layout.row()
-                            row.label(text=f"TRESHOLD {Wmin}/{Wmax} :")
-                            row = layout.row()
-                            row.prop(
-                                BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
-                            )
+                        row = layout.row()
+                        row.label(text=f"TRESHOLD {Wmin}/{Wmax} :")
+                        row.operator("bdental.tresholdupdate")
+                        row = layout.row()
+                        row.prop(
+                            BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
+                        )
+                        
+                        row = layout.row()
+                        row.operator("bdental.tresh_segment")
+                        row = layout.row()
+                        row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
-                            row = layout.row()
-                            row.operator("bdental.tresh_segment")
-                            row = layout.row()
-                            row.operator("bdental.addslices", icon="EMPTY_AXIS")
-
-                            # if (
-                            #     context.active_object
-                            #     and context.active_object.type == "MESH"
-                            # ):
-                            #     obj = context.active_object
-                            #     if "_SLICE" in obj.name:
-                            #         split = layout.split(align=True)
-                            #         col = split.column()
-                            #         col.label(text=f" {obj.name} location:")
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj, "location", index=0, text="Location X :"
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj, "location", index=1, text="Location Y :"
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj, "location", index=2, text="Location Z :"
-                            #         )
-
-                            #         col = split.column()
-                            #         col.label(text=f" {obj.name} rotation:")
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj, "rotation_euler", index=0, text="Angle X :"
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj, "rotation_euler", index=1, text="Angle Y :"
-                            #         )
-                            #         row = col.row(align=True)
-                            #         row.prop(
-                            #             obj, "rotation_euler", index=2, text="Angle Z :"
-                            #         )
-
-                            
-                        else:
-                            row = layout.row()
-                            row.operator(
-                                "bdental.volume_render", icon="COLORSET_01_VEC"
-                            )
-
-                    if not BDENTAL_Props.CT_Loaded:
+                        
+                    if not BDENTAL_Props.CT_Rendered:
                         row = layout.row()
                         row.operator(
-                            "bdental.load_3dimage_file", icon="COLORSET_01_VEC"
+                            "bdental.volume_render", icon="COLORSET_01_VEC"
                         )
+
+                    
 
 
 class BDENTAL_PT_AlignPanel(bpy.types.Panel):

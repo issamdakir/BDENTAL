@@ -43,30 +43,6 @@ ProgEvent = vtkCommand.ProgressEvent
 #######################################################################################
 ########################### CT Scan Load : Operators ##############################
 #######################################################################################
-# def GetMaxSerie(DCM_DIR):
-#     Sries_Dict = {}
-#     Error_Files = []
-    
-#     for i, dcm_file in enumerate(os.listdir(DCM_DIR)):
-#         path = join(DCM_DIR, dcm_file)
-#         try:
-#             img = sitk.ReadImage(path)
-#             Sr_Number = str(img.GetMetaData("0020|000e"))
-#             if not Sr_Number in Sries_Dict.keys():
-#                 Sries_Dict[Sr_Number] = 1
-#             else :
-#                 Sries_Dict[Sr_Number] += 1
-#             print(f" reading file number ({i})...")
-#         except RuntimeError :
-#             Error_Files.append(path)
-
-#     Count_dict = {}
-#     for k,v in Sries_Dict.items():
-#         Count_dict[v] = k
-#     MaxCount = max(Count_dict)
-#     MaxSerie = Count_dict[MaxCount]
-
-#     return MaxSerie, MaxCount
 
 def GetMaxSerie(UserDcmDir):
 
@@ -107,17 +83,14 @@ def Load_Dicom_funtion(context, q):
 
     ################################################################################################
     start = Tcounter()
-    print("processing START...")
-
     ################################################################################################
-
     BDENTAL_Props = context.scene.BDENTAL_Props
-    BDENTAL_Props.UserDcmDir = RelPath(BDENTAL_Props.UserDcmDir)
-    BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
-
-    UserDcmDir = AbsPath(BDENTAL_Props.UserDcmDir)
     UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
+    UserDcmDir = AbsPath(BDENTAL_Props.UserDcmDir)
 
+    CtVolumeList = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume") ]
+    Preffix = f"BD{(len(CtVolumeList)+1):02}"
+    
     ################################################################################################
 
     if not exists(UserProjectDir):
@@ -126,15 +99,15 @@ def Load_Dicom_funtion(context, q):
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
 
-    elif os.listdir(UserProjectDir):
+    # elif os.listdir(UserProjectDir):
 
-        message = [" Project Folder Should be Empty ! "]
-        ShowMessageBox(message=message, icon="COLORSET_02_VEC")
-        return {"CANCELLED"}
+    #     message = [" Project Folder Should be Empty ! "]
+    #     ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+    #     return {"CANCELLED"}
 
     elif not exists(UserDcmDir):
 
-        message = [" Please use the Folder icon to Select a valid Dicom Directory ! "]
+        message = [" The Selected Dicom Directory Path is not valid ! "]
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
 
@@ -150,7 +123,7 @@ def Load_Dicom_funtion(context, q):
 
         ##################################### debug_02 ###################################
         debug_01 = Tcounter()
-        message = f" MaxSerie ID : {MaxSerie}, MaxSerie Count : {MaxCount} ({round(debug_01-start,2)})"
+        message = f"MaxSerie ID : {MaxSerie}, MaxSerie Count : {MaxCount} (Time : {round(debug_01-start,2)} secondes)"
         print(message)
         # q.put("Max DcmSerie extracted...")
         ####################################################################################
@@ -211,26 +184,23 @@ def Load_Dicom_funtion(context, q):
 
         # Set DcmInfo :
 
-        BDENTAL_Props.Wmin = Wmin
-        BDENTAL_Props.Wmax = Wmax
-
         DcmInfo = {
-            "RenderSz":Sz,
-            "RenderSp":Sp,
-            "PixelType": Image3D.GetPixelIDTypeAsString(),
-            "Wmin": Wmin,
-            "Wmax": Wmax,
-            "Size": Sz,
-            "Dims": Dims,
-            "Spacing": Sp,
-            "Origin": Origin,
-            "Direction": Direction,
-            "TransformMatrix": TransformMatrix,
-            "DirectionMatrix_4x4": DirectionMatrix_4x4,
-            "TransMatrix_4x4": TransMatrix_4x4,
-            "VtkTransform_4x4": VtkTransform_4x4,
-            "VolumeCenter": VCenter,
-        }
+                "Preffix":Preffix,
+                "RenderSz":Sz,
+                "RenderSp":Sp,
+                "PixelType": Image3D.GetPixelIDTypeAsString(),
+                "Wmin": Wmin,
+                "Wmax": Wmax,
+                "Size": Sz,
+                "Dims": Dims,
+                "Spacing": Sp,
+                "Origin": Origin,
+                "Direction": Direction,
+                "TransformMatrix": TransformMatrix,
+                "DirectionMatrix_4x4": DirectionMatrix_4x4,
+                "TransMatrix_4x4": TransMatrix_4x4,
+                "VtkTransform_4x4": VtkTransform_4x4,
+                "VolumeCenter": VCenter}
 
         tags = {
             "StudyDate": "0008|0020",
@@ -241,21 +211,19 @@ def Load_Dicom_funtion(context, q):
             "WinWidth": "0028|1051",
         }
         for k, tag in tags.items():
+
             if tag in reader.GetMetaDataKeys():
                 v = reader.GetMetaData(tag)
-                DcmInfo[k] = v
-
+                
             else:
                 v = ""
 
             DcmInfo[k] = v
             Image3D.SetMetaData(tag, v)
 
-        
-
         ###################################### debug_02 ##################################
         debug_02 = Tcounter()
-        message = f"DcmInfo set done in {debug_02-debug_01}"
+        message = f"DcmInfo {Preffix} set (Time : {debug_02-debug_01} secondes)"
         print(message)
         # q.put("Dicom Info extracted...")
         ##################################################################################
@@ -265,21 +233,15 @@ def Load_Dicom_funtion(context, q):
         SlicesDir = join(UserProjectDir, "Slices")
         if not exists(SlicesDir):
             os.makedirs(SlicesDir)
-        BDENTAL_Props.SlicesDir = RelPath(SlicesDir)
+        DcmInfo["SlicesDir"] = RelPath(SlicesDir)
 
         PngDir = join(UserProjectDir, "PNG")
         if not exists(PngDir):
             os.makedirs(PngDir)
-        BDENTAL_Props.PngDir = RelPath(PngDir)
 
-        PatientID = DcmInfo["PatientID"]
-        Preffix = PatientID or ""
-        
-        # NrrdHuPath = join(UserProjectDir, f"{Preffix}_Image3DHu.nrrd")
-        Nrrd255Path = join(UserProjectDir, f"{Preffix}_BDENTAL_Image3D255.nrrd")
+        Nrrd255Path = join(UserProjectDir, f"{Preffix}_Image3D255.nrrd")
        
-        # BDENTAL_Props.NrrdHuPath = NrrdHuPath
-        BDENTAL_Props.Nrrd255Path = RelPath(Nrrd255Path)
+        DcmInfo["Nrrd255Path"] = RelPath(Nrrd255Path)
 
         #######################################################################################
         # set IntensityWindowing  :
@@ -301,7 +263,7 @@ def Load_Dicom_funtion(context, q):
         ################################## debug_03 ######################################
         debug_03 = Tcounter()
         message = (
-            f"Nrrd255 written to Project directory, done in {debug_03-debug_02}"
+            f"Nrrd255 Export done!  (Time : {debug_03-debug_02} secondes)"
         )
         print(message)
         # q.put("nrrd 3D image file saved...")
@@ -312,7 +274,7 @@ def Load_Dicom_funtion(context, q):
         #########################################################################################
         def Image3DToPNG(i, slices, PngDir, Preffix):
             img_Slice = slices[i]
-            img_Name = f"{Preffix}_img_{i:04}.png"
+            img_Name = f"{Preffix}_img{i:04}.png"
             image_path = join(PngDir, img_Name)
             cv2.imwrite(image_path, img_Slice)
             image = bpy.data.images.load(image_path)
@@ -324,13 +286,9 @@ def Load_Dicom_funtion(context, q):
         MaxSp = max(Vector(Sp))
         if MaxSp < 0.25:
             SampleRatio = round(MaxSp / 0.25, 2)
-            print(SampleRatio)
             Image3D_255 = ResizeImage(sitkImage=Image3D_255, Ratio=SampleRatio)
             DcmInfo["RenderSz"] = Image3D_255.GetSize()
             DcmInfo["RenderSp"] = Image3D_255.GetSpacing()
-            print(Image3D_255.GetSize())
-            print(Image3D_255.GetSpacing())
-
             
         Array = sitk.GetArrayFromImage(Image3D_255)
         slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
@@ -353,316 +311,301 @@ def Load_Dicom_funtion(context, q):
 
         # os.removedirs(PngDir)
         shutil.rmtree(PngDir)
-        BDENTAL_Props.PngDir = ""
+        DcmInfo["CT_Loaded"] = True
+        # Set DcmInfo property :
+        DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+        DcmInfoDict[Preffix] = DcmInfo
+        BDENTAL_Props.DcmInfo = str(DcmInfoDict)
+
         #################################### debug_04 ####################################
         debug_04 = Tcounter()
         message = (
-            f"PNG images written to PNG directory, done in {debug_04-debug_03}"
+            f"PNG images exported (Time : {debug_04-debug_03} secondes)"
         )
         print(message)
         # q.put("PNG images saved...")
         ##################################################################################
 
+        if Preffix == "BD01" :
+            BlendFile = f"{Preffix}_CT-SCAN.blend"
+            Blendpath = join(UserProjectDir, BlendFile)
+            bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
+        else :
+            bpy.ops.wm.save_mainfile()
         
-        BlendFile = f"{Preffix}SCAN.blend"
-        
-        Blendpath = join(UserProjectDir, BlendFile)
-        bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-        
-        # Set DcmInfo property :
-        BDENTAL_Props.DcmInfo = str(DcmInfo)
         #################################### debug_05 ####################################
         debug_05 = Tcounter()
-        message = f"Blender project saved to Project directory, done in {debug_05-debug_04}"
+        message = f"{Preffix}_CT-SCAN.blend saved (Time = {debug_05-debug_04} secondes)"
         print(message)
         # q.put("Blender project saved...")
         ##################################################################################
 
         #############################################################################################
         finish = Tcounter()
-        message = f"FINISHED in {finish-start} secondes"
+        message = f"Data Loaded in {finish-start} secondes"
         print(message)
         # q.put(message)
         #############################################################################################
         message = ["DICOM loaded successfully. "]
         ShowMessageBox(message=message, icon="COLORSET_03_VEC")
+
+        return DcmInfo
     ####### End Load_Dicom_fuction ##############
 
-# BDENTAL CT Scan Series Load :
-class BDENTAL_OT_Load_DICOM_Series(bpy.types.Operator):
-    """ Load scan infos """
 
-    bl_idname = "bdental.load_dicom_series"
-    bl_label = "OPEN SCAN"
-
-    q = Queue()
-
-    def execute(self, context):
-
-        Load_Dicom_funtion(context, self.q)
-        BDENTAL_Props = context.scene.BDENTAL_Props
-        BDENTAL_Props.CT_Loaded = True
-
-        return {"FINISHED"}
 
 #######################################################################################
 # BDENTAL CT Scan 3DImage File Load :
-class BDENTAL_OT_Load_3DImage_File(bpy.types.Operator):
-    """ Load scan infos """
 
-    bl_idname = "bdental.load_3dimage_file"
-    bl_label = "OPEN SCAN"
+def Load_3DImage_function(context,q):
 
-    def execute(self, context):
+    BDENTAL_Props = context.scene.BDENTAL_Props
+    UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
+    UserImageFile = AbsPath(BDENTAL_Props.UserImageFile)
 
-        BDENTAL_Props = context.scene.BDENTAL_Props
-        BDENTAL_Props.UserDcmDir = RelPath(BDENTAL_Props.UserDcmDir)
-        BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
+    CtVolumeList = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume") ]
+    Preffix = f"BD{(len(CtVolumeList)+1):02}"
 
-        UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
-        UserImageFile = AbsPath(BDENTAL_Props.UserImageFile)
-    
+    #######################################################################################
+    # 1rst check if paths are valid and supported :
+
+    if not exists(UserProjectDir):
+
+        message = ["The Selected Project Directory Path is not valid ! "]
+        ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+        return {"CANCELLED"}
+
+    if not exists(UserImageFile):
+        message = [" The Selected Image File Path is not valid ! "]
+        
+        ShowMessageBox(message=message, icon="COLORSET_02_VEC")
+        return {"CANCELLED"}
+
+    reader = sitk.ImageFileReader()
+    IO = reader.GetImageIOFromFileName(UserImageFile)
+    FileExt = os.path.splitext(UserImageFile)[1]
+
+    if not IO:
+        message = [f"{FileExt} files are not Supported! for more info about supported files please refer to Addon wiki "]
+        ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+        return {"CANCELLED"}
+
+    Image3D = sitk.ReadImage(UserImageFile)
+    Depth = Image3D.GetDepth()
+
+    if Depth == 0:
+        message = ["Can't Build 3D Volume from 2D Image !", "for more info about supported files,", "please refer to Addon wiki"]
+        ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+        return {"CANCELLED"}
+
+    ImgFileName = os.path.split(UserImageFile)[1]
+    BDENTAL_nrrd = HU_Image = False
+    if ImgFileName.startswith("BD") and ImgFileName.endswith("_Image3D255.nrrd") :
+        BDENTAL_nrrd = True
+    if Image3D.GetPixelIDTypeAsString() in [
+        "32-bit signed integer",
+        "16-bit signed integer"]:
+        HU_Image = True
+
+    if not BDENTAL_nrrd and not HU_Image :
+        message = ["Only Images with Hunsfield data or BDENTAL nrrd images are supported !"]
+        ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+        return {"CANCELLED"}
+    ###########################################################################################################
+
+    else:
+
+        start = Tcounter()
+        ####################################
+        Image3D = sitk.ReadImage(UserImageFile)
+        # Get Dicom Info :
+        Sp = Spacing = Image3D.GetSpacing()
+        Sz = Size = Image3D.GetSize()
+        Dims = Dimensions = Image3D.GetDimension()
+        Origin = Image3D.GetOrigin()
+        Direction = Image3D.GetDirection()
+
+        # calculate Informations :
+        D = Direction
+        O = Origin
+        DirectionMatrix_4x4 = Matrix(
+            (
+                (D[0], D[1], D[2], 0.0),
+                (D[3], D[4], D[5], 0.0),
+                (D[6], D[7], D[8], 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+            )
+        )
+
+        TransMatrix_4x4 = Matrix(
+            (
+                (1.0, 0.0, 0.0, O[0]),
+                (0.0, 1.0, 0.0, O[1]),
+                (0.0, 0.0, 1.0, O[2]),
+                (0.0, 0.0, 0.0, 1.0),
+            )
+        )
+
+        VtkTransform_4x4 = TransMatrix_4x4 @ DirectionMatrix_4x4
+        P0 = Image3D.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
+        P_diagonal = Image3D.TransformContinuousIndexToPhysicalPoint(
+            (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
+        )
+        VCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
+
+        C = VCenter
+
+        TransformMatrix = Matrix(
+            (
+                (D[0], D[1], D[2], C[0]),
+                (D[3], D[4], D[5], C[1]),
+                (D[6], D[7], D[8], C[2]),
+                (0.0, 0.0, 0.0, 1.0),
+            )
+        )
+
+        # Set DcmInfo :
+
+        DcmInfo = {
+            "Preffix":Preffix,
+            "RenderSz":Sz,
+            "RenderSp":Sp,
+            "PixelType": Image3D.GetPixelIDTypeAsString(),
+            "Wmin": Wmin,
+            "Wmax": Wmax,
+            "Size": Sz,
+            "Dims": Dims,
+            "Spacing": Sp,
+            "Origin": Origin,
+            "Direction": Direction,
+            "TransformMatrix": TransformMatrix,
+            "DirectionMatrix_4x4": DirectionMatrix_4x4,
+            "TransMatrix_4x4": TransMatrix_4x4,
+            "VtkTransform_4x4": VtkTransform_4x4,
+            "VolumeCenter": VCenter}
+
+        tags = {
+            "StudyDate": "0008|0020",
+            "PatientName": "0010|0010",
+            "PatientID": "0010|0020",
+            "BirthDate": "0010|0030",
+            "WinCenter": "0028|1050",
+            "WinWidth": "0028|1051",
+        }
+        reader = sitk.ImageFileReader()
+        reader.SetFileName(UserImageFile)
+        reader.LoadPrivateTagsOn()
+        reader.ReadImageInformation()
+
+        for k, tag in tags.items():
+
+            if tag in reader.GetMetaDataKeys():
+                v = reader.GetMetaData(tag)
+                
+            else:
+                v = ""
+
+            DcmInfo[k] = v
+            Image3D.SetMetaData(tag, v)
 
         #######################################################################################
-        # 1rst check if paths are valid and supported :
+        # Add directories :
+        SlicesDir = join(UserProjectDir, "Slices")
+        if not exists(SlicesDir):
+            os.makedirs(SlicesDir)
+        DcmInfo["SlicesDir"] = RelPath(SlicesDir)
 
-        if not exists(UserProjectDir):
+        PngDir = join(UserProjectDir, "PNG")
+        if not exists(PngDir):
+            os.makedirs(PngDir)
 
-            message = ["The Selected Project Directory Path is not valid ! "]
-            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
-            return {"CANCELLED"}
-
-        if os.listdir(UserProjectDir):
-
-            message = [" Project Folder Should be Empty ! "]
-            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
-            return {"CANCELLED"}
-
-        if not exists(UserImageFile):
-            message = [" Please Select a valid Image File ! "]
-            
-            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
-            return {"CANCELLED"}
-
-        reader = sitk.ImageFileReader()
-        IO = reader.GetImageIOFromFileName(UserImageFile)
-        FileExt = os.path.splitext(UserImageFile)[1]
-
-        if not IO:
-            message = [f"{FileExt} files are not Supported! for more info about supported files please refer to Addon wiki "]
-            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
-            return {"CANCELLED"}
-
-        Image3D = sitk.ReadImage(UserImageFile)
-        Depth = Image3D.GetDepth()
-
-        if Depth == 0:
-            message = ["Can't Build 3D Volume from 2D Image !", "for more info about supported files,", "please refer to Addon wiki"]
-            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
-            return {"CANCELLED"}
-
-        ImgFileName = os.path.split(UserImageFile)[1]
-        
+        Nrrd255Path = join(UserProjectDir, f"{Preffix}_Image3D255.nrrd")
     
-
-        if not Image3D.GetPixelIDTypeAsString() in [
-            "32-bit signed integer",
-            "16-bit signed integer",
-        ] and not "BDENTAL_Image3D255.nrrd" in ImgFileName:
-            message = ["Only Images with Hunsfield data are supported !"]
-            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
-            return {"CANCELLED"}
-        ###########################################################################################################
-
-        else:
-
-            print("processing START...")
-            start = Tcounter()
-            ####################################
-            Image3D = sitk.ReadImage(UserImageFile)
-            # Get Dicom Info :
-            Sp = Spacing = Image3D.GetSpacing()
-            Sz = Size = Image3D.GetSize()
-            Dims = Dimensions = Image3D.GetDimension()
-            Origin = Image3D.GetOrigin()
-            Direction = Image3D.GetDirection()
-
-            # calculate Informations :
-            D = Direction
-            O = Origin
-            DirectionMatrix_4x4 = Matrix(
-                (
-                    (D[0], D[1], D[2], 0.0),
-                    (D[3], D[4], D[5], 0.0),
-                    (D[6], D[7], D[8], 0.0),
-                    (0.0, 0.0, 0.0, 1.0),
-                )
-            )
-
-            TransMatrix_4x4 = Matrix(
-                (
-                    (1.0, 0.0, 0.0, O[0]),
-                    (0.0, 1.0, 0.0, O[1]),
-                    (0.0, 0.0, 1.0, O[2]),
-                    (0.0, 0.0, 0.0, 1.0),
-                )
-            )
-
-            VtkTransform_4x4 = TransMatrix_4x4 @ DirectionMatrix_4x4
-            P0 = Image3D.TransformContinuousIndexToPhysicalPoint((0, 0, 0))
-            P_diagonal = Image3D.TransformContinuousIndexToPhysicalPoint(
-                (Sz[0] - 1, Sz[1] - 1, Sz[2] - 1)
-            )
-            VCenter = (Vector(P0) + Vector(P_diagonal)) * 0.5
-
-            C = VCenter
-
-            TransformMatrix = Matrix(
-                (
-                    (D[0], D[1], D[2], C[0]),
-                    (D[3], D[4], D[5], C[1]),
-                    (D[6], D[7], D[8], C[2]),
-                    (0.0, 0.0, 0.0, 1.0),
-                )
-            )
-
-            # Set DcmInfo :
-
-            BDENTAL_Props.Wmin = Wmin
-            BDENTAL_Props.Wmax = Wmax
-
-            DcmInfo = {
-                "RenderSz":Sz,
-                "RenderSp":Sp,
-                "PixelType": Image3D.GetPixelIDTypeAsString(),
-                "Wmin": Wmin,
-                "Wmax": Wmax,
-                "Size": Sz,
-                "Dims": Dims,
-                "Spacing": Sp,
-                "Origin": Origin,
-                "Direction": Direction,
-                "TransformMatrix": TransformMatrix,
-                "DirectionMatrix_4x4": DirectionMatrix_4x4,
-                "TransMatrix_4x4": TransMatrix_4x4,
-                "VtkTransform_4x4": VtkTransform_4x4,
-                "VolumeCenter": VCenter,
-            }
-
-            tags = {
-                "StudyDate": "0008|0020",
-                "PatientName": "0010|0010",
-                "PatientID": "0010|0020",
-                "BirthDate": "0010|0030",
-                "WinCenter": "0028|1050",
-                "WinWidth": "0028|1051",
-            }
-            for k, tag in tags.items():
-                if tag in Image3D.GetMetaDataKeys():
-                    v = Image3D.GetMetaData(tag)
-                    DcmInfo[k] = v
-                else:
-                    v = ""
-
-                DcmInfo[k] = v
-                Image3D.SetMetaData(tag, v)
-
-            # Set DcmInfo property :
-            BDENTAL_Props.DcmInfo = str(DcmInfo)
-
-            #######################################################################################
-            # Add directories :
-            SlicesDir = join(UserProjectDir, "Slices")
-            if not exists(SlicesDir):
-                os.makedirs(SlicesDir)
-            BDENTAL_Props.SlicesDir = RelPath(SlicesDir)
-
-            PngDir = join(UserProjectDir, "PNG")
-            if not exists(PngDir):
-                os.makedirs(PngDir)
-            BDENTAL_Props.PngDir = RelPath(PngDir)
-                # NrrdHuPath = join(UserProjectDir, "Image3DHu.nrrd")
-            Nrrd255Path = join(UserProjectDir, "BDENTAL_Image3D255.nrrd")
-            # BDENTAL_Props.NrrdHuPath = NrrdHuPath
-            BDENTAL_Props.Nrrd255Path = RelPath(Nrrd255Path)
+        DcmInfo["Nrrd255Path"] = RelPath(Nrrd255Path)
+        
+        if BDENTAL_nrrd :
+            Image3D_255 = Image3D
             
-            if "BDENTAL_Image3D255.nrrd" in ImgFileName :
-                Image3D_255 = Image3D
-                
-            else :
-                
-
-            #######################################################################################
-                # set IntensityWindowing  :
-                Image3D_255 = sitk.Cast(
-                    sitk.IntensityWindowing(
-                        Image3D,
-                        windowMinimum=Wmin,
-                        windowMaximum=Wmax,
-                        outputMinimum=0.0,
-                        outputMaximum=255.0,
-                    ),
-                    sitk.sitkUInt8,
-                )
-
-            # Convert Dicom to nrrd file :
-            # sitk.WriteImage(Image3D, NrrdHuPath)
-            sitk.WriteImage(Image3D_255, Nrrd255Path)
-
-            #############################################################################################
-            # MultiThreading PNG Writer:
-            #########################################################################################
-            def Image3DToPNG(i, slices, PngDir, Preffix):
-                img_Slice = slices[i]
-                img_Name = f"{Preffix}_img_{i:04}.png"
-                image_path = join(PngDir, img_Name)
-                cv2.imwrite(image_path, img_Slice)
-                image = bpy.data.images.load(image_path)
-                image.pack()
-                print(f"{img_Name} was processed...")
-
-            #########################################################################################
-            # Get slices list :
-            MaxSp = max(Vector(Sp))
-            if MaxSp < 0.25:
-                SampleRatio = round(MaxSp / 0.25, 2)
-                Image3D_255 = ResizeImage(sitkImage=Image3D_255, Ratio=SampleRatio)
-                DcmInfo["RenderSz"] = Image3D_255.GetSize()
-                DcmInfo["RenderSp"] = Image3D_255.GetSpacing()
+        else :
             
-            Array = sitk.GetArrayFromImage(Image3D_255)
-            slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
-            # slices = [Image3D_255[:, :, i] for i in range(Image3D_255.GetDepth())]
-            PatientID = DcmInfo["PatientID"]
-            Preffix = PatientID
-            threads = [
-                threading.Thread(
-                    target=Image3DToPNG,
-                    args=[i, slices, PngDir, Preffix],
-                    daemon=True,
-                )
-                for i in range(len(slices))
-            ]
 
-            for t in threads:
-                t.start()
+        #######################################################################################
+            # set IntensityWindowing  :
+            Image3D_255 = sitk.Cast(
+                sitk.IntensityWindowing(
+                    Image3D,
+                    windowMinimum=Wmin,
+                    windowMaximum=Wmax,
+                    outputMinimum=0.0,
+                    outputMaximum=255.0,
+                ),
+                sitk.sitkUInt8,
+            )
 
-            for t in threads:
-                t.join()
-            # os.removedirs(PngDir)
-            shutil.rmtree(PngDir)
-            BDENTAL_Props.PngDir = ""
-            BDENTAL_Props.CT_Loaded = True
-            
-            BlendFile = "SCAN.blend"
+        # Convert Dicom to nrrd file :
+        # sitk.WriteImage(Image3D, NrrdHuPath)
+        sitk.WriteImage(Image3D_255, Nrrd255Path)
+
+        #############################################################################################
+        # MultiThreading PNG Writer:
+        #########################################################################################
+        def Image3DToPNG(i, slices, PngDir, Preffix):
+            img_Slice = slices[i]
+            img_Name = f"{Preffix}_img{i:04}.png"
+            image_path = join(PngDir, img_Name)
+            cv2.imwrite(image_path, img_Slice)
+            image = bpy.data.images.load(image_path)
+            image.pack()
+            # print(f"{img_Name} was processed...")
+
+        #########################################################################################
+        # Get slices list :
+        MaxSp = max(Vector(Sp))
+        if MaxSp < 0.25:
+            SampleRatio = round(MaxSp / 0.25, 2)
+            Image3D_255 = ResizeImage(sitkImage=Image3D_255, Ratio=SampleRatio)
+            DcmInfo["RenderSz"] = Image3D_255.GetSize()
+            DcmInfo["RenderSp"] = Image3D_255.GetSpacing()
+        
+        Array = sitk.GetArrayFromImage(Image3D_255)
+        slices = [np.flipud(Array[i, :, :]) for i in range(Array.shape[0])]
+        # slices = [Image3D_255[:, :, i] for i in range(Image3D_255.GetDepth())]
+        
+        threads = [
+            threading.Thread(
+                target=Image3DToPNG,
+                args=[i, slices, PngDir, Preffix],
+                daemon=True,
+            )
+            for i in range(len(slices))
+        ]
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # os.removedirs(PngDir)
+        shutil.rmtree(PngDir)
+        DcmInfo["CT_Loaded"] = True
+        
+        # Set DcmInfo property :
+        DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+        DcmInfoDict[Preffix] = DcmInfo
+        BDENTAL_Props.DcmInfo = str(DcmInfoDict)
+        if Preffix == "BD01" :
+            BlendFile = f"{Preffix}_CT-SCAN.blend"
             Blendpath = join(UserProjectDir, BlendFile)
             bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-            #############################################################################################
-            finish = Tcounter()
-            print(f"OPEN SCAN FINISHED in {finish-start} second(s)")
-            #############################################################################################
-
-            return {"FINISHED"}
+        else :
+            bpy.ops.wm.save_mainfile()
+        #############################################################################################
+        finish = Tcounter()
+        print(f"Data Loaded in {finish-start} second(s)")
+        #############################################################################################
+        
+        return DcmInfo
 
 ##########################################################################################
 ######################### BDENTAL Volume Render : ########################################
@@ -673,82 +616,113 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
     bl_idname = "bdental.volume_render"
     bl_label = "RENDER VOLUME"
 
+    q = Queue()
+
+
     def execute(self, context):
+
+        Start = Tcounter()
+        print("Data Loading START...")
 
         global ShadersBlendFile
         global GpShader
 
         BDENTAL_Props = context.scene.BDENTAL_Props
+        BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
+        
+        DataType = BDENTAL_Props.DataType
+        if DataType == "DICOM Series" :
+            DcmInfo = Load_Dicom_funtion(context, self.q)
+        if DataType == "3D Image File" :
+            DcmInfo = Load_3DImage_function(context,self.q)
+        print(type(DcmInfo)," : ",DcmInfo)
         UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
-        Wmin = BDENTAL_Props.Wmin
-        Wmax = BDENTAL_Props.Wmax
-        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        Preffix = DcmInfo["Preffix"]
+        Wmin = DcmInfo["Wmin"]
+        Wmax = DcmInfo["Wmax"]
         # PngDir = AbsPath(BDENTAL_Props.PngDir)
-        CTVolumeList = [
-            obj for obj in context.scene.objects if obj.name.endswith("CTVolume")
+        print("\n##########################\n")
+        print("Data Loading START...")
+        VolumeRender(DcmInfo, GpShader, ShadersBlendFile)
+        scn = bpy.context.scene
+        scn.render.engine = "BLENDER_EEVEE"
+        BDENTAL_Props.GroupNodeName = GpShader
+
+        if GpShader == "VGS_Marcos_modified":
+            GpNode = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
+            Low_Treshold = GpNode.nodes["Low_Treshold"].outputs[0]
+            Low_Treshold.default_value = 600
+            WminNode = GpNode.nodes["WminNode"].outputs[0]
+            WminNode.default_value = Wmin
+            WmaxNode = GpNode.nodes["WmaxNode"].outputs[0]
+            WmaxNode.default_value = Wmax
+
+            # newdriver = Low_Treshold.driver_add("default_value")
+            # newdriver.driver.type = "AVERAGE"
+            # var = newdriver.driver.variables.new()
+            # var.name = "Treshold"
+            # var.type = "SINGLE_PROP"
+            # var.targets[0].id_type = "SCENE"
+            # var.targets[0].id = bpy.context.scene
+            # var.targets[0].data_path = "BDENTAL_Props.Treshold"
+            # newdriver.driver.expression = "Treshold"
+
+        if GpShader == "VGS_Dakir_01":
+            # Add Treshold Driver :
+            GpNode = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
+            value = (600-Wmin)/(Wmax-Wmin) 
+            treshramp = GpNode.nodes["TresholdRamp"].color_ramp.elements[0] = value
+
+        
+            
+            
+            # newdriver = treshramp.driver_add("position")
+            # newdriver.driver.type = "SCRIPTED"
+            # var = newdriver.driver.variables.new()
+            # var.name = "Treshold"
+            # var.type = "SINGLE_PROP"
+            # var.targets[0].id_type = "SCENE"
+            # var.targets[0].id = bpy.context.scene
+            # var.targets[0].data_path = "BDENTAL_Props.Treshold"
+            # newdriver.driver.expression = f"(Treshold-{Wmin})/{Wmax-Wmin}"
+
+        BDENTAL_Props.CT_Rendered = True
+        bpy.ops.view3d.view_selected(use_all_regions=False)
+
+        # post_handlers = bpy.app.handlers.depsgraph_update_post
+        # [
+        #     post_handlers.remove(h)
+        #     for h in post_handlers
+        #     if h.__name__ == "BDENTAL_TresholdUpdate"
+        # ]
+        # post_handlers.append(BDENTAL_TresholdUpdate)
+
+
+        # bpy.ops.wm.save_mainfile()
+
+        Finish = Tcounter()
+
+        print(f"Finished (Time : {Finish-Start}")
+
+        return {"FINISHED"}
+
+class BDENTAL_OT_TresholdUpdate(bpy.types.Operator):
+    """ Add treshold Update Handler  """
+
+    bl_idname = "bdental.tresholdupdate"
+    bl_label = "Update Treshold"
+
+    def execute(self, context):    
+        post_handlers = bpy.app.handlers.depsgraph_update_post
+        [
+            post_handlers.remove(h)
+            for h in post_handlers
+            if h.__name__ == "BDENTAL_TresholdUpdate"
         ]
+        post_handlers.append(BDENTAL_TresholdUpdate)
 
-        if CTVolumeList == []:
-
-            VolumeRender(DcmInfo, GpShader, ShadersBlendFile)
-            scn = bpy.context.scene
-            scn.render.engine = "BLENDER_EEVEE"
-            BDENTAL_Props.GroupNodeName = GpShader
-
-            if GpShader == "VGS_Marcos_modified":
-                GpNode = bpy.data.node_groups[GpShader]
-                Low_Treshold = GpNode.nodes["Low_Treshold"].outputs[0]
-                GpNode.nodes["WminNode"].outputs[0].default_value = Wmin
-                WmaxNode = GpNode.nodes["WmaxNode"].outputs[0].default_value = Wmax
-
-                newdriver = Low_Treshold.driver_add("default_value")
-                newdriver.driver.type = "AVERAGE"
-                var = newdriver.driver.variables.new()
-                var.name = "Treshold"
-                var.type = "SINGLE_PROP"
-                var.targets[0].id_type = "SCENE"
-                var.targets[0].id = bpy.context.scene
-                var.targets[0].data_path = "BDENTAL_Props.Treshold"
-
-                Wmin = BDENTAL_Props.Wmin
-                Wmax = BDENTAL_Props.Wmax
-
-                newdriver.driver.expression = "Treshold"
-
-            if GpShader == "VGS_Dakir_01":
-                # Add Treshold Driver :
-                GpNode = bpy.data.node_groups[GpShader]
-                treshramp = GpNode.nodes["TresholdRamp"].color_ramp.elements[0]
-                newdriver = treshramp.driver_add("position")
-                newdriver.driver.type = "SCRIPTED"
-                var = newdriver.driver.variables.new()
-                var.name = "Treshold"
-                var.type = "SINGLE_PROP"
-                var.targets[0].id_type = "SCENE"
-                var.targets[0].id = bpy.context.scene
-                var.targets[0].data_path = "BDENTAL_Props.Treshold"
-                newdriver.driver.expression = f"(Treshold-{Wmin})/{Wmax-Wmin}"
-
-            BDENTAL_Props.CT_Rendered = True
-            bpy.ops.view3d.view_selected(use_all_regions=False)
-
-            PatientName = DcmInfo["PatientName"]
-            PatientID = DcmInfo["PatientID"]
-            Preffix = PatientName or PatientID
-            if Preffix:
-                BlendFile = f"{Preffix}SCAN.blend"
-            else:
-                BlendFile = "SCAN.blend"
-            Blendpath = join(UserProjectDir, BlendFile)
-
-            bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-
-            return {"FINISHED"}
-
-        else:
-            message = ["Please delete previously rendered CTVolume,", " or start a new project and retry !"]
-            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
-            return {"CANCELLED"}
+        return {"FINISHED"}
+    
 
 ##########################################################################################
 ######################### BDENTAL Add Slices : ########################################
@@ -761,16 +735,35 @@ class BDENTAL_OT_AddSlices(bpy.types.Operator):
     bl_label = "SLICE VOLUME"
 
     def execute(self, context):
-        AddAxialSlice()
-        obj = bpy.context.object
-        MoveToCollection(obj=obj, CollName="SLICES")
-        AddCoronalSlice()
-        obj = bpy.context.object
-        MoveToCollection(obj=obj, CollName="SLICES")
-        AddSagitalSlice()
-        obj = bpy.context.object
-        MoveToCollection(obj=obj, CollName="SLICES")
-        return {"FINISHED"}
+        BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+        Active_Obj = bpy.context.view_layer.objects.active
+        Conditions = [  not Active_Obj,
+                        not Active_Obj.name.startswith("BD"),
+                        not Active_Obj.name.endswith("_CTVolume"),
+                        Active_Obj.select_get() == False,
+                                                                     ]
+
+        if Conditions[0] or Conditions[1] or Conditions[2] or Conditions[3] :                
+            message = [" Please select CTVOLUME for segmentation ! "]
+            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+            return {"CANCELLED"}
+                
+        else :
+            Vol = Active_Obj
+            Preffix = Vol.name[:4]
+            DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+            DcmInfo = DcmInfoDict[Preffix]
+
+            AddAxialSlice(Preffix, DcmInfo)
+            obj = bpy.context.object
+            MoveToCollection(obj=obj, CollName="SLICES")
+            AddCoronalSlice(Preffix, DcmInfo)
+            obj = bpy.context.object
+            MoveToCollection(obj=obj, CollName="SLICES")
+            AddSagitalSlice(Preffix, DcmInfo)
+            obj = bpy.context.object
+            MoveToCollection(obj=obj, CollName="SLICES")
+            return {"FINISHED"}
 
 ###############################################################################
 ####################### BDENTAL VOLUME to Mesh : ################################
@@ -799,28 +792,46 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
     TimingDict = {}
 
     def invoke(self, context, event):
-        BDENTAL_Props = bpy.context.scene.BDENTAL_Props
-        Wmin = BDENTAL_Props.Wmin
-        Wmax = BDENTAL_Props.Wmax
-        Nrrd255Path = AbsPath(BDENTAL_Props.Nrrd255Path)
-        Treshold = BDENTAL_Props.Treshold
-        if exists(Nrrd255Path):
-            if GpShader == "VGS_Marcos_modified":
-                GpNode = bpy.data.node_groups[GpShader]
-                ColorPresetRamp = GpNode.nodes["ColorPresetRamp"].color_ramp
-                value = (Treshold - Wmin) / (Wmax - Wmin)
-                TreshColor = [
-                    round(c, 2) for c in ColorPresetRamp.evaluate(value)[0:3]
-                ]
-                self.SegmentColor = TreshColor + [1.0]
-            self.q = Queue()
-            wm = context.window_manager
-            return wm.invoke_props_dialog(self)
 
-        else:
-            message = [" Image File not Found in Project Folder ! "]
+        BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+
+        Active_Obj = bpy.context.view_layer.objects.active
+        Conditions = [  not Active_Obj,
+                        not Active_Obj.name.startswith("BD"),
+                        not Active_Obj.name.endswith("_CTVolume"),
+                        Active_Obj.select_get() == False ]
+        
+        if Conditions[0] or Conditions[1] or Conditions[2] or Conditions[3] :                
+            message = [" Please select CTVOLUME for segmentation ! "]
             ShowMessageBox(message=message, icon="COLORSET_01_VEC")
             return {"CANCELLED"}
+                
+                
+        else :
+            self.Vol = Active_Obj
+            self.Preffix = self.Vol.name[:4]
+            DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+            self.DcmInfo = DcmInfoDict[self.Preffix]
+            self.Nrrd255Path = AbsPath(self.DcmInfo["Nrrd255Path"])
+            self.Treshold = BDENTAL_Props.Treshold
+        
+            if exists(self.Nrrd255Path):
+                if GpShader == "VGS_Marcos_modified":
+                    GpNode = bpy.data.node_groups.get(f"{self.Preffix}_{GpShader}")
+                    ColorPresetRamp = GpNode.nodes["ColorPresetRamp"].color_ramp
+                    value = (self.Treshold - Wmin) / (Wmax - Wmin)
+                    TreshColor = [
+                        round(c, 2) for c in ColorPresetRamp.evaluate(value)[0:3]
+                    ]
+                    self.SegmentColor = TreshColor + [1.0]
+                self.q = Queue()
+                wm = context.window_manager
+                return wm.invoke_props_dialog(self)
+
+            else:
+                message = [" Image File not Found in Project Folder ! "]
+                ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+                return {"CANCELLED"}
 
     def DicomToMesh(self):
         counter_start = Tcounter()
@@ -829,16 +840,14 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         #########################################################################
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
         # NrrdHuPath = BDENTAL_Props.NrrdHuPath
-        Nrrd255Path = AbsPath(BDENTAL_Props.Nrrd255Path)
+        Nrrd255Path = self.Nrrd255Path
         UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
-        DcmInfo = eval(BDENTAL_Props.DcmInfo)
+        DcmInfo = self.DcmInfo
         Origin = DcmInfo["Origin"]
         VtkTransform_4x4 = DcmInfo["VtkTransform_4x4"]
         VtkMatrix = list(np.array(VtkTransform_4x4).ravel())
-        Treshold = BDENTAL_Props.Treshold
+        Treshold = self.Treshold
 
-        Wmin = BDENTAL_Props.Wmin
-        Wmax = BDENTAL_Props.Wmax
         StlPath = join(UserProjectDir, f"{self.SegmentName}_SEGMENTATION.stl")
         Thikness = 1
         # Reduction = 0.9
@@ -970,8 +979,8 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         # import stl to blender scene :
         bpy.ops.import_mesh.stl(filepath=StlPath)
         obj = bpy.context.object
-        obj.name = f"{self.SegmentName}_SEGMENTATION"
-        obj.data.name = f"{self.SegmentName}_mesh"
+        obj.name = f"{self.Preffix}_{self.SegmentName}_SEGMENTATION"
+        obj.data.name = f"{self.Preffix}_{self.SegmentName}_mesh"
 
         bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
@@ -1029,9 +1038,10 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
 #################################################################################################
 
 classes = [
-    BDENTAL_OT_Load_DICOM_Series,
-    BDENTAL_OT_Load_3DImage_File,
+    # BDENTAL_OT_Load_DICOM_Series,
+    # BDENTAL_OT_Load_3DImage_File,
     BDENTAL_OT_Volume_Render,
+    BDENTAL_OT_TresholdUpdate,
     BDENTAL_OT_AddSlices,
     BDENTAL_OT_TreshSegment,
 ]
@@ -1040,7 +1050,13 @@ def register():
 
     for cls in classes:
         bpy.utils.register_class(cls)
-
+    post_handlers = bpy.app.handlers.depsgraph_update_post
+    [
+        post_handlers.remove(h)
+        for h in post_handlers
+        if h.__name__ == "BDENTAL_TresholdUpdate"
+    ]
+    post_handlers.append(BDENTAL_TresholdUpdate)
 def unregister():
 
     for cls in reversed(classes):
