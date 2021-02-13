@@ -628,7 +628,7 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
         global GpShader
 
         BDENTAL_Props = context.scene.BDENTAL_Props
-        BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
+        #BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
         
         DataType = BDENTAL_Props.DataType
         if DataType == "DICOM Series" :
