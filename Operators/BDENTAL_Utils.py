@@ -56,8 +56,8 @@ def CtxOverride(context):
     return Override, area3D, space3D
 
 def AbsPath(P):
-    if P.startswith('//') :
-        P = abspath(bpy.path.abspath(P))
+    # if P.startswith('//') :
+    P = abspath(bpy.path.abspath(P))
     return P   
 
 def RelPath(P):
@@ -183,7 +183,7 @@ def BDENTAL_TresholdUpdate(scene):
         if Active_Obj and Active_Obj in CtVolumeList :
             print("Treshold Update trigred!")
             Vol = Active_Obj
-            Preffix = Vol.name[:4]
+            Preffix = Vol.name[:5]
             GpNode = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
 
             if GpShader == "VGS_Marcos_modified":
@@ -334,7 +334,7 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
     for obj in PlansList:
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-
+    bpy.context.view_layer.layer_collection.children["CT Voxel"].hide_viewport = False
     bpy.ops.object.join()
 
     Voxel = bpy.context.object
@@ -437,237 +437,254 @@ def Scene_Settings():
 #################################################################################################
 # Add Slices :
 #################################################################################################
+@persistent
 def AxialSliceUpdate(scene):
 
-    BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+    BDENTAL_Props = scene.BDENTAL_Props
     
     Planes = [obj for obj in bpy.context.scene.objects if "_AXIAL_SLICE" in obj.name]
-    Plane = bpy.context.view_layer.objects.active
-    Preffix = Plane.name[2:6]
-    DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
-    DcmInfo = DcmInfoDict[Preffix]
-    ImageData = AbsPath(DcmInfo["Nrrd255Path"])
+    if Planes :
+        Plane = bpy.context.view_layer.objects.active
+        Condition1 = Plane in Planes
+        if Condition1 :
+            Preffix = Plane.name[2:7]
+            DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+            DcmInfo = DcmInfoDict[Preffix]
+            ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
-    Condition1 = exists(ImageData)
-    Condition2 = bpy.context.view_layer.objects.active in Planes
+            Condition2 = exists(ImageData)
 
-    if Planes and Condition1 and Condition2 :
+            if Condition2 :
 
-        SlicesDir = AbsPath(DcmInfo["SlicesDir"])
-        TransformMatrix = DcmInfo["TransformMatrix"]
-        ImageName = f"{Plane.name}.png"
-        ImagePath = join(SlicesDir, ImageName)
+                SlicesDir = AbsPath(DcmInfo["SlicesDir"])
+                TransformMatrix = DcmInfo["TransformMatrix"]
+                ImageName = f"{Plane.name}.png"
+                ImagePath = join(SlicesDir, ImageName)
 
-        #########################################
-        #########################################
-        # Get ImageData Infos :
-        Image3D_255 = sitk.ReadImage(ImageData)
-        Sp = Spacing = Image3D_255.GetSpacing()
-        Sz = Size = Image3D_255.GetSize()
-        Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
-        Image3D_255.SetOrigin(Ortho_Origin)
-        Image3D_255.SetDirection(np.identity(3).flatten())
-        
-        # Output Parameters :
-        Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
-        Out_Direction = Vector(np.identity(3).flatten())
-        Out_Size = (Sz[0], Sz[1], 1)
-        Out_Spacing = Sp
+                #########################################
+                #########################################
+                # Get ImageData Infos :
+                Image3D_255 = sitk.ReadImage(ImageData)
+                Sp = Spacing = Image3D_255.GetSpacing()
+                Sz = Size = Image3D_255.GetSize()
+                Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
+                Image3D_255.SetOrigin(Ortho_Origin)
+                Image3D_255.SetDirection(np.identity(3).flatten())
+                
+                # Output Parameters :
+                Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
+                Out_Direction = Vector(np.identity(3).flatten())
+                Out_Size = (Sz[0], Sz[1], 1)
+                Out_Spacing = Sp
 
-        ######################################
-        # Get Plane Orientation and location :
-        PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
-        Rot = PlanMatrix.to_euler()
-        Trans = PlanMatrix.translation
-        Rvec = (Rot.x, Rot.y, Rot.z)
-        Tvec = Trans
+                ######################################
+                # Get Plane Orientation and location :
+                PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
+                Rot = PlanMatrix.to_euler()
+                Trans = PlanMatrix.translation
+                Rvec = (Rot.x, Rot.y, Rot.z)
+                Tvec = Trans
 
-        ##########################################
-        # Euler3DTransform :
-        Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter((0, 0, 0))
-        Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
-        Euler3D.SetTranslation(Tvec)
-        Euler3D.ComputeZYXOn()
-        #########################################
+                ##########################################
+                # Euler3DTransform :
+                Euler3D = sitk.Euler3DTransform()
+                Euler3D.SetCenter((0, 0, 0))
+                Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
+                Euler3D.SetTranslation(Tvec)
+                Euler3D.ComputeZYXOn()
+                #########################################
 
-        Image2D = sitk.Resample(
-            Image3D_255,
-            Out_Size,
-            Euler3D,
-            sitk.sitkLinear,
-            Out_Origin,
-            Out_Spacing,
-            Out_Direction,
-            0,
-        )
-        #############################################
-        # Write Image :
-        Array = sitk.GetArrayFromImage(Image2D)
-        Flipped_Array = np.flipud(Array.reshape(Array.shape[1], Array.shape[2]))
-        cv2.imwrite(ImagePath, Flipped_Array)
-        #############################################
-        # Update Blender Image data :
-        BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
-        if not BlenderImage:
-            bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
-        BlenderImage.reload()
+                Image2D = sitk.Resample(
+                    Image3D_255,
+                    Out_Size,
+                    Euler3D,
+                    sitk.sitkLinear,
+                    Out_Origin,
+                    Out_Spacing,
+                    Out_Direction,
+                    0,
+                )
+                #############################################
+                # Write Image :
+                Array = sitk.GetArrayFromImage(Image2D)
+                Flipped_Array = np.flipud(Array.reshape(Array.shape[1], Array.shape[2]))
+                cv2.imwrite(ImagePath, Flipped_Array)
+                #############################################
+                # Update Blender Image data :
+                BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
+                if not BlenderImage:
+                    bpy.data.images.load(ImagePath)
+                    BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
+                else :
+                    BlenderImage.filepath = ImagePath
+                    BlenderImage.reload()
 
+@persistent
 def CoronalSliceUpdate(scene):
 
-    BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+    BDENTAL_Props = scene.BDENTAL_Props
     
     Planes = [obj for obj in bpy.context.scene.objects if "_CORONAL_SLICE" in obj.name]
-    Plane = bpy.context.view_layer.objects.active
-    Preffix = Plane.name[2:6]
-    DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
-    DcmInfo = DcmInfoDict[Preffix]
-    ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
-    Condition1 = exists(ImageData)
-    Condition2 = bpy.context.view_layer.objects.active in Planes
+    if Planes :
+        Plane = bpy.context.view_layer.objects.active
+        Condition1 = Plane in Planes
+        if Condition1 :
+            Preffix = Plane.name[2:7]
+            DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+            DcmInfo = DcmInfoDict[Preffix]
+            ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
-    if Planes and Condition1 and Condition2 :
+            Condition2 = exists(ImageData)
 
-        SlicesDir = AbsPath(DcmInfo["SlicesDir"])
-        TransformMatrix = DcmInfo["TransformMatrix"]
-        ImageName = f"{Plane.name}.png"
-        ImagePath = join(SlicesDir, ImageName)
+            if Condition2 :
 
-        #########################################
-        #########################################
-        # Get ImageData Infos :
-        Image3D_255 = sitk.ReadImage(ImageData)
-        Sp = Spacing = Image3D_255.GetSpacing()
-        Sz = Size = Image3D_255.GetSize()
-        Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
-        Image3D_255.SetOrigin(Ortho_Origin)
-        Image3D_255.SetDirection(np.identity(3).flatten())
-        
-        # Output Parameters :
-        Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
-        Out_Direction = Vector(np.identity(3).flatten())
-        Out_Size = (Sz[0], Sz[1], 1)
-        Out_Spacing = Sp
+                SlicesDir = AbsPath(DcmInfo["SlicesDir"])
+                TransformMatrix = DcmInfo["TransformMatrix"]
+                ImageName = f"{Plane.name}.png"
+                ImagePath = join(SlicesDir, ImageName)
 
-        ######################################
-        # Get Plane Orientation and location :
-        PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
-        Rot = PlanMatrix.to_euler()
-        Trans = PlanMatrix.translation
-        Rvec = (Rot.x, Rot.y, Rot.z)
-        Tvec = Trans
+                #########################################
+                #########################################
+                # Get ImageData Infos :
+                Image3D_255 = sitk.ReadImage(ImageData)
+                Sp = Spacing = Image3D_255.GetSpacing()
+                Sz = Size = Image3D_255.GetSize()
+                Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
+                Image3D_255.SetOrigin(Ortho_Origin)
+                Image3D_255.SetDirection(np.identity(3).flatten())
+                
+                # Output Parameters :
+                Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
+                Out_Direction = Vector(np.identity(3).flatten())
+                Out_Size = (Sz[0], Sz[1], 1)
+                Out_Spacing = Sp
 
-        ##########################################
-        # Euler3DTransform :
-        Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter((0, 0, 0))
-        Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
-        Euler3D.SetTranslation(Tvec)
-        Euler3D.ComputeZYXOn()
-        #########################################
+                ######################################
+                # Get Plane Orientation and location :
+                PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
+                Rot = PlanMatrix.to_euler()
+                Trans = PlanMatrix.translation
+                Rvec = (Rot.x, Rot.y, Rot.z)
+                Tvec = Trans
 
-        Image2D = sitk.Resample(
-            Image3D_255,
-            Out_Size,
-            Euler3D,
-            sitk.sitkLinear,
-            Out_Origin,
-            Out_Spacing,
-            Out_Direction,
-            0,
-        )
-        #############################################
-        # Write Image :
-        Array = sitk.GetArrayFromImage(Image2D)
-        Flipped_Array = np.flipud(Array.reshape(Array.shape[1], Array.shape[2]))
-        cv2.imwrite(ImagePath, Flipped_Array)
-        #############################################
-        # Update Blender Image data :
-        BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
-        if not BlenderImage:
-            bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
-        BlenderImage.reload()
+                ##########################################
+                # Euler3DTransform :
+                Euler3D = sitk.Euler3DTransform()
+                Euler3D.SetCenter((0, 0, 0))
+                Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
+                Euler3D.SetTranslation(Tvec)
+                Euler3D.ComputeZYXOn()
+                #########################################
 
+                Image2D = sitk.Resample(
+                    Image3D_255,
+                    Out_Size,
+                    Euler3D,
+                    sitk.sitkLinear,
+                    Out_Origin,
+                    Out_Spacing,
+                    Out_Direction,
+                    0,
+                )
+                #############################################
+                # Write Image :
+                Array = sitk.GetArrayFromImage(Image2D)
+                Flipped_Array = np.flipud(Array.reshape(Array.shape[1], Array.shape[2]))
+                cv2.imwrite(ImagePath, Flipped_Array)
+                #############################################
+                # Update Blender Image data :
+                BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
+                if not BlenderImage:
+                    bpy.data.images.load(ImagePath)
+                    BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
+                else :
+                    BlenderImage.filepath = ImagePath
+                    BlenderImage.reload()
+
+@persistent
 def SagitalSliceUpdate(scene):
 
-    BDENTAL_Props = bpy.context.scene.BDENTAL_Props
+    BDENTAL_Props = scene.BDENTAL_Props
     
     Planes = [obj for obj in bpy.context.scene.objects if "_SAGITAL_SLICE" in obj.name]
-    Plane = bpy.context.view_layer.objects.active
-    Preffix = Plane.name[2:6]
-    DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
-    DcmInfo = DcmInfoDict[Preffix]
-    ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
-    Condition1 = exists(ImageData)
-    Condition2 = bpy.context.view_layer.objects.active in Planes
+    if Planes :
+        Plane = bpy.context.view_layer.objects.active
+        Condition1 = Plane in Planes
+        if Condition1 :
+            Preffix = Plane.name[2:7]
+            DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+            DcmInfo = DcmInfoDict[Preffix]
+            ImageData = AbsPath(DcmInfo["Nrrd255Path"])
 
-    if Planes and Condition1 and Condition2 :
+            Condition2 = exists(ImageData)
 
-        SlicesDir = AbsPath(DcmInfo["SlicesDir"])
-        TransformMatrix = DcmInfo["TransformMatrix"]
-        ImageName = f"{Plane.name}.png"
-        ImagePath = join(SlicesDir, ImageName)
+            if Condition2 :
 
-        #########################################
-        #########################################
-        # Get ImageData Infos :
-        Image3D_255 = sitk.ReadImage(ImageData)
-        Sp = Spacing = Image3D_255.GetSpacing()
-        Sz = Size = Image3D_255.GetSize()
-        Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
-        Image3D_255.SetOrigin(Ortho_Origin)
-        Image3D_255.SetDirection(np.identity(3).flatten())
-        
-        # Output Parameters :
-        Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
-        Out_Direction = Vector(np.identity(3).flatten())
-        Out_Size = (Sz[0], Sz[1], 1)
-        Out_Spacing = Sp
+                SlicesDir = AbsPath(DcmInfo["SlicesDir"])
+                TransformMatrix = DcmInfo["TransformMatrix"]
+                ImageName = f"{Plane.name}.png"
+                ImagePath = join(SlicesDir, ImageName)
+
+                #########################################
+                #########################################
+                # Get ImageData Infos :
+                Image3D_255 = sitk.ReadImage(ImageData)
+                Sp = Spacing = Image3D_255.GetSpacing()
+                Sz = Size = Image3D_255.GetSize()
+                Ortho_Origin = -0.5 * np.array(Sp) * (np.array(Sz) - np.array((1, 1, 1)))
+                Image3D_255.SetOrigin(Ortho_Origin)
+                Image3D_255.SetDirection(np.identity(3).flatten())
+                
+                # Output Parameters :
+                Out_Origin = [Ortho_Origin[0], Ortho_Origin[1], 0]
+                Out_Direction = Vector(np.identity(3).flatten())
+                Out_Size = (Sz[0], Sz[1], 1)
+                Out_Spacing = Sp
 
 
-        ######################################
-        # Get Plane Orientation and location :
-        PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
-        Rot = PlanMatrix.to_euler()
-        Trans = PlanMatrix.translation
-        Rvec = (Rot.x, Rot.y, Rot.z)
-        Tvec = Trans
+                ######################################
+                # Get Plane Orientation and location :
+                PlanMatrix = TransformMatrix.inverted() @ Plane.matrix_world
+                Rot = PlanMatrix.to_euler()
+                Trans = PlanMatrix.translation
+                Rvec = (Rot.x, Rot.y, Rot.z)
+                Tvec = Trans
 
-        ##########################################
-        # Euler3DTransform :
-        Euler3D = sitk.Euler3DTransform()
-        Euler3D.SetCenter((0, 0, 0))
-        Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
-        Euler3D.SetTranslation(Tvec)
-        Euler3D.ComputeZYXOn()
-        #########################################
+                ##########################################
+                # Euler3DTransform :
+                Euler3D = sitk.Euler3DTransform()
+                Euler3D.SetCenter((0, 0, 0))
+                Euler3D.SetRotation(Rvec[0], Rvec[1], Rvec[2])
+                Euler3D.SetTranslation(Tvec)
+                Euler3D.ComputeZYXOn()
+                #########################################
 
-        Image2D = sitk.Resample(
-            Image3D_255,
-            Out_Size,
-            Euler3D,
-            sitk.sitkLinear,
-            Out_Origin,
-            Out_Spacing,
-            Out_Direction,
-            0,
-        )
-        #############################################
-        # Write Image :
-        Array = sitk.GetArrayFromImage(Image2D)
-        Flipped_Array = np.flipud(Array.reshape(Array.shape[1], Array.shape[2]))
-        cv2.imwrite(ImagePath, Flipped_Array)
-        #############################################
-        # Update Blender Image data :
-        BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
-        if not BlenderImage:
-            bpy.data.images.load(ImagePath)
-            BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
-        BlenderImage.reload()
+                Image2D = sitk.Resample(
+                    Image3D_255,
+                    Out_Size,
+                    Euler3D,
+                    sitk.sitkLinear,
+                    Out_Origin,
+                    Out_Spacing,
+                    Out_Direction,
+                    0,
+                )
+                #############################################
+                # Write Image :
+                Array = sitk.GetArrayFromImage(Image2D)
+                Flipped_Array = np.flipud(Array.reshape(Array.shape[1], Array.shape[2]))
+                cv2.imwrite(ImagePath, Flipped_Array)
+                #############################################
+                # Update Blender Image data :
+                BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
+                if not BlenderImage:
+                    bpy.data.images.load(ImagePath)
+                    BlenderImage = bpy.data.images.get(f"{Plane.name}.png")
+                else :
+                    BlenderImage.filepath = ImagePath
+                    BlenderImage.reload()
 
 ####################################################################
 def AddAxialSlice(Preffix, DcmInfo):

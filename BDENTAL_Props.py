@@ -19,7 +19,7 @@ def TresholdUpdateFunction(self, context):
     CtVolumeList = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume") ]
     if context.object in CtVolumeList :
         Vol = context.object
-        Preffix = Vol.name[:4]
+        Preffix = Vol.name[:5]
         GpNode = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
 
         if GpShader == "VGS_Marcos_modified":

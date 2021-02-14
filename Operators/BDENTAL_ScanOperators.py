@@ -3,7 +3,7 @@ from math import degrees, radians, pi
 import numpy as np
 from time import sleep, perf_counter as Tcounter
 from queue import Queue
-from os.path import join, dirname, abspath, exists
+from os.path import join, dirname, abspath, exists, split
 from importlib import reload  
 
 # Blender Imports :
@@ -88,9 +88,6 @@ def Load_Dicom_funtion(context, q):
     UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
     UserDcmDir = AbsPath(BDENTAL_Props.UserDcmDir)
 
-    CtVolumeList = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume") ]
-    Preffix = f"BD{(len(CtVolumeList)+1):02}"
-    
     ################################################################################################
 
     if not exists(UserProjectDir):
@@ -98,12 +95,6 @@ def Load_Dicom_funtion(context, q):
         message = ["The Selected Project Directory Path is not valid ! "]
         ShowMessageBox(message=message, icon="COLORSET_02_VEC")
         return {"CANCELLED"}
-
-    # elif os.listdir(UserProjectDir):
-
-    #     message = [" Project Folder Should be Empty ! "]
-    #     ShowMessageBox(message=message, icon="COLORSET_02_VEC")
-    #     return {"CANCELLED"}
 
     elif not exists(UserDcmDir):
 
@@ -117,6 +108,30 @@ def Load_Dicom_funtion(context, q):
         return {"CANCELLED"}
 
     else:
+        # Get Preffix and save file :
+        SceneVolumes = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume")]
+        if not SceneVolumes :
+            Preffix = 'BD001'
+        else :
+            for i in range(1,100) :
+                Preffix = f"BD{i:03}"
+                
+                SceneVolPreffixs = [Vol.name[:5] for Vol in SceneVolumes]
+                if not Preffix in SceneVolPreffixs :
+                    break
+
+        Split = split(UserProjectDir)
+        ProjectName = (Split[-1] or Split[-2])
+        BlendFile = f"{ProjectName}_CT-SCAN.blend"
+        Blendpath = join(UserProjectDir, BlendFile)
+        
+        if not exists(Blendpath) or bpy.context.blend_data.filepath == Blendpath:
+            bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
+        else :
+            bpy.ops.wm.save_mainfile()
+
+        # Start Reading Dicom data :
+        ######################################################################################
         Series_reader = sitk.ImageSeriesReader()
         MaxSerie, MaxCount = GetMaxSerie(UserDcmDir)
         DcmSerie = Series_reader.GetGDCMSeriesFileNames(UserDcmDir, MaxSerie)
@@ -185,6 +200,7 @@ def Load_Dicom_funtion(context, q):
         # Set DcmInfo :
 
         DcmInfo = {
+                "UserProjectDir":RelPath(UserProjectDir),
                 "Preffix":Preffix,
                 "RenderSz":Sz,
                 "RenderSp":Sp,
@@ -316,7 +332,8 @@ def Load_Dicom_funtion(context, q):
         DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
         DcmInfoDict[Preffix] = DcmInfo
         BDENTAL_Props.DcmInfo = str(DcmInfoDict)
-
+        BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
+        bpy.ops.wm.save_mainfile()
         #################################### debug_04 ####################################
         debug_04 = Tcounter()
         message = (
@@ -325,13 +342,6 @@ def Load_Dicom_funtion(context, q):
         print(message)
         # q.put("PNG images saved...")
         ##################################################################################
-
-        if Preffix == "BD01" :
-            BlendFile = f"{Preffix}_CT-SCAN.blend"
-            Blendpath = join(UserProjectDir, BlendFile)
-            bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-        else :
-            bpy.ops.wm.save_mainfile()
         
         #################################### debug_05 ####################################
         debug_05 = Tcounter()
@@ -628,14 +638,13 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
         global GpShader
 
         BDENTAL_Props = context.scene.BDENTAL_Props
-        BDENTAL_Props.UserProjectDir = RelPath(BDENTAL_Props.UserProjectDir)
         
         DataType = BDENTAL_Props.DataType
         if DataType == "DICOM Series" :
             DcmInfo = Load_Dicom_funtion(context, self.q)
         if DataType == "3D Image File" :
             DcmInfo = Load_3DImage_function(context,self.q)
-        print(type(DcmInfo)," : ",DcmInfo)
+        
         UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
         Preffix = DcmInfo["Preffix"]
         Wmin = DcmInfo["Wmin"]
@@ -688,6 +697,7 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
 
         BDENTAL_Props.CT_Rendered = True
         bpy.ops.view3d.view_selected(use_all_regions=False)
+        bpy.ops.wm.save_mainfile()
 
         # post_handlers = bpy.app.handlers.depsgraph_update_post
         # [
@@ -739,18 +749,18 @@ class BDENTAL_OT_AddSlices(bpy.types.Operator):
         Active_Obj = bpy.context.view_layer.objects.active
         Conditions = [  not Active_Obj,
                         not Active_Obj.name.startswith("BD"),
-                        not Active_Obj.name.endswith("_CTVolume"),
+                        not Active_Obj.name.endswith(("_CTVolume", "SEGMENTATION")),
                         Active_Obj.select_get() == False,
                                                                      ]
 
         if Conditions[0] or Conditions[1] or Conditions[2] or Conditions[3] :                
-            message = [" Please select CTVOLUME for segmentation ! "]
-            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+            message = [" Please select CTVOLUME or SEGMENTATION ! "]
+            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
             return {"CANCELLED"}
                 
         else :
             Vol = Active_Obj
-            Preffix = Vol.name[:4]
+            Preffix = Vol.name[:5]
             DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
             DcmInfo = DcmInfoDict[Preffix]
 
@@ -803,13 +813,13 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         
         if Conditions[0] or Conditions[1] or Conditions[2] or Conditions[3] :                
             message = [" Please select CTVOLUME for segmentation ! "]
-            ShowMessageBox(message=message, icon="COLORSET_01_VEC")
+            ShowMessageBox(message=message, icon="COLORSET_02_VEC")
             return {"CANCELLED"}
                 
                 
         else :
             self.Vol = Active_Obj
-            self.Preffix = self.Vol.name[:4]
+            self.Preffix = self.Vol.name[:5]
             DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
             self.DcmInfo = DcmInfoDict[self.Preffix]
             self.Nrrd255Path = AbsPath(self.DcmInfo["Nrrd255Path"])
@@ -841,6 +851,7 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         BDENTAL_Props = bpy.context.scene.BDENTAL_Props
         # NrrdHuPath = BDENTAL_Props.NrrdHuPath
         Nrrd255Path = self.Nrrd255Path
+        print(Nrrd255Path)
         UserProjectDir = AbsPath(BDENTAL_Props.UserProjectDir)
         DcmInfo = self.DcmInfo
         Origin = DcmInfo["Origin"]
@@ -860,8 +871,8 @@ class BDENTAL_OT_TreshSegment(bpy.types.Operator):
         Sz = Image3D.GetSize()
         Sp = Image3D.GetSpacing()
         MaxSp = max(Vector(Sp))
-        if MaxSp < 0.25:
-            SampleRatio = round(MaxSp / 0.25, 2)
+        if MaxSp < 0.3:
+            SampleRatio = round(MaxSp / 0.3, 2)
             ResizedImage = ResizeImage(sitkImage=Image3D, Ratio=SampleRatio)
             Image3D = ResizedImage
             # print(f"Image DOWN Sampled : SampleRatio = {SampleRatio}")
@@ -1051,13 +1062,27 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     post_handlers = bpy.app.handlers.depsgraph_update_post
+    MyPostHandlers = ["BDENTAL_TresholdUpdate", "AxialSliceUpdate", "CoronalSliceUpdate", "SagitalSliceUpdate"]
     [
         post_handlers.remove(h)
         for h in post_handlers
-        if h.__name__ == "BDENTAL_TresholdUpdate"
+        if h.__name__ in MyPostHandlers
     ]
+
     post_handlers.append(BDENTAL_TresholdUpdate)
+    post_handlers.append(AxialSliceUpdate)
+    post_handlers.append(CoronalSliceUpdate)
+    post_handlers.append(SagitalSliceUpdate)
+    
 def unregister():
+
+    post_handlers = bpy.app.handlers.depsgraph_update_post
+    MyPostHandlers = ["BDENTAL_TresholdUpdate", "AxialSliceUpdate", "CoronalSliceUpdate", "SagitalSliceUpdate"]
+    [
+        post_handlers.remove(h)
+        for h in post_handlers
+        if h.__name__ in MyPostHandlers
+    ]
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
