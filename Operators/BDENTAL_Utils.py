@@ -43,6 +43,30 @@ def ShowMessageBox(message=[], title="INFO", icon="INFO"):
 #######################################################################################
 # Load CT Scan functions :
 #######################################################################################
+
+def CleanScanData(Preffix) :
+    D = bpy.data
+    Objects = D.objects
+    Meshes = D.meshes
+    Images = D.images
+    Materials = D.materials
+    NodeGroups = D.node_groups
+
+    # Remove Voxel data :
+    [Meshes.remove(m) for m in Meshes if f"{Preffix}_PLANE_" in m.name]
+    [Images.remove(img) for img in Images if f"{Preffix}_img" in img.name]
+    [Materials.remove(mat) for mat in Materials if "BD001_Voxelmat_" in mat.name]
+    [NodeGroups.remove(NG) for NG in NodeGroups if "BD001_VGS_" in NG.name]
+
+    # Remove old Slices :
+    SlicePlanes = [Objects.remove(obj) for obj in Objects if Preffix in obj.name and "SLICE" in obj.name]
+    SliceMeshes = [Meshes.remove(m) for m in Meshes if Preffix in m.name and "SLICE" in m.name]
+    SliceMats = [Materials.remove(mat) for mat in Materials if Preffix in mat.name and "SLICE" in mat.name]
+    SliceImages = [Images.remove(img) for img in Images if Preffix in img.name and "SLICE" in img.name]
+    
+
+
+
 def CtxOverride(context):
     Override = context.copy()
     area3D = [area for area in context.screen.areas if area.type == "VIEW_3D"][0]
@@ -149,12 +173,16 @@ def AddPlaneMesh(DimX, DimY, Name):
 
 def AddPlaneObject(Name, mesh, CollName):
     Plane_obj = bpy.data.objects.new(Name, mesh)
-    Coll = bpy.data.collections.get(CollName)
-    if not Coll:
-        Coll = bpy.data.collections.new(CollName)
-        bpy.context.scene.collection.children.link(Coll)
-    if not Plane_obj in Coll.objects[:]:
-        Coll.objects.link(Plane_obj)
+    MyColl = bpy.data.collections.get(CollName)
+
+    if not MyColl:
+        MyColl = bpy.data.collections.new(CollName)
+
+    if not MyColl in bpy.context.scene.collection.children[:] :
+        bpy.context.scene.collection.children.link(MyColl)
+
+    if not Plane_obj in MyColl.objects[:]:
+        MyColl.objects.link(Plane_obj)
 
     return Plane_obj
 
@@ -266,7 +294,7 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
         # ##########################################
         Name = f"{Preffix}_PLANE_{i}"
         mesh = AddPlaneMesh(DimX, DimY, Name)
-        CollName = "CT Voxel"
+        CollName = "CT_Voxel"
 
         obj = AddPlaneObject(Name, mesh, CollName)
         obj.location[2] = i * Offset
@@ -334,7 +362,7 @@ def VolumeRender(DcmInfo, GpShader, ShadersBlendFile):
     for obj in PlansList:
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-    bpy.context.view_layer.layer_collection.children["CT Voxel"].hide_viewport = False
+    bpy.context.view_layer.layer_collection.children["CT_Voxel"].hide_viewport = False
     bpy.ops.object.join()
 
     Voxel = bpy.context.object

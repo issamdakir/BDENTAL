@@ -109,17 +109,26 @@ def Load_Dicom_funtion(context, q):
 
     else:
         # Get Preffix and save file :
-        SceneVolumes = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume")]
-        if not SceneVolumes :
-            Preffix = 'BD001'
-        else :
-            for i in range(1,100) :
-                Preffix = f"BD{i:03}"
-                
-                SceneVolPreffixs = [Vol.name[:5] for Vol in SceneVolumes]
-                if not Preffix in SceneVolPreffixs :
-                    break
+        DcmInfoDict = eval(BDENTAL_Props.DcmInfo)
+        Preffixs = list(DcmInfoDict.keys())
 
+        for i in range(1,100) :
+            Preffix = f"BD{i:03}"
+            if not Preffix in Preffixs :
+                break
+        ########################################################
+        # SceneVolumes = [obj for obj in bpy.context.scene.objects if obj.name.startswith("BD") and obj.name.endswith("_CTVolume")]
+        # if not SceneVolumes :
+        #     Preffix = 'BD001'
+        # else :
+        #     for i in range(1,100) :
+        #         Preffix = f"BD{i:03}"
+                
+        #         SceneVolPreffixs = [Vol.name[:5] for Vol in SceneVolumes]
+        #         if not Preffix in SceneVolPreffixs :
+        #             break
+        # CleanScanData(Preffix)
+        #################################################################
         Split = split(UserProjectDir)
         ProjectName = (Split[-1] or Split[-2])
         BlendFile = f"{ProjectName}_CT-SCAN.blend"
@@ -624,7 +633,7 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
     """ Volume Render """
 
     bl_idname = "bdental.volume_render"
-    bl_label = "RENDER VOLUME"
+    bl_label = "Import SCAN"
 
     q = Queue()
 

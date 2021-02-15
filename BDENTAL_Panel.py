@@ -48,29 +48,26 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                 row = layout.row()
                 row.prop(BDENTAL_Props, "UserDcmDir", text="DICOM Folder")
                 if BDENTAL_Props.UserDcmDir:
-                    if BDENTAL_Props.CT_Rendered:
-                        row = layout.row()
-                        row.operator(
-                            "bdental.volume_render", icon="COLORSET_03_VEC"
-                        )
-                        
-                        row = layout.row()
-                        row.label(text=f"Threshold {Wmin} to {Wmax} HU:")
-                        row = layout.row()
-                        row.prop(
-                            BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
-                        )
 
-                        row = layout.row()
-                        row.operator("bdental.tresh_segment")
-                        row = layout.row()
-                        row.operator("bdental.addslices", icon="EMPTY_AXIS")
+                    Box = layout.box()
+                    row = Box.row()
+                    row.alignment = "CENTER"
+                    row.scale_y = 2
+                    row.operator(
+                        "bdental.volume_render", icon="OUTLINER_OB_POINTCLOUD"
+                    )
+                    
+                    row = layout.row()
+                    row.label(text=f"Threshold {Wmin} to {Wmax} HU:")
+                    row = layout.row()
+                    row.prop(
+                        BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
+                    )
 
-                    if not BDENTAL_Props.CT_Rendered:
-                        row = layout.row()
-                        row.operator(
-                            "bdental.volume_render", icon="COLORSET_01_VEC"
-                        )
+                    row = layout.row()
+                    row.operator("bdental.tresh_segment")
+                    row = layout.row()
+                    row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
 
             if BDENTAL_Props.DataType == "3D Image File":
@@ -80,31 +77,26 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
 
                 if BDENTAL_Props.UserImageFile:
                     
-                    if BDENTAL_Props.CT_Rendered:
-                        row = layout.row()
-                        row.operator(
-                            "bdental.volume_render", icon="COLORSET_03_VEC"
-                        )
-                        row = layout.row()
-                        row.label(text=f"TRESHOLD {Wmin}/{Wmax} :")
-                        row.operator("bdental.tresholdupdate")
-                        row = layout.row()
-                        row.prop(
-                            BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
-                        )
-                        
-                        row = layout.row()
-                        row.operator("bdental.tresh_segment")
-                        row = layout.row()
-                        row.operator("bdental.addslices", icon="EMPTY_AXIS")
+                    row = layout.row()
+                    row.alignment = "CENTER"
+                    row.scale_y = 2
+                    row.operator(
+                        "bdental.volume_render",icon="OUTLINER_OB_POINTCLOUD"
+                    )
+                    row = layout.row()
+                    row.label(text=f"TRESHOLD {Wmin}/{Wmax} :")
+                    row.operator("bdental.tresholdupdate")
+                    row = layout.row()
+                    row.prop(
+                        BDENTAL_Props, "Treshold", text="TRESHOLD", slider=True
+                    )
+                    
+                    row = layout.row()
+                    row.operator("bdental.tresh_segment")
+                    row = layout.row()
+                    row.operator("bdental.addslices", icon="EMPTY_AXIS")
 
-                        
-                    if not BDENTAL_Props.CT_Rendered:
-                        row = layout.row()
-                        row.operator(
-                            "bdental.volume_render", icon="COLORSET_01_VEC"
-                        )
-
+                
                     
 
 
