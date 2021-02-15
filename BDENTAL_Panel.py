@@ -50,11 +50,12 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                 if BDENTAL_Props.UserDcmDir:
 
                     Box = layout.box()
+                    Box.alert = True
                     row = Box.row()
                     row.alignment = "CENTER"
                     row.scale_y = 2
                     row.operator(
-                        "bdental.volume_render", icon="OUTLINER_OB_POINTCLOUD"
+                        "bdental.volume_render", icon="IMPORT"
                     )
                     
                     row = layout.row()
@@ -81,7 +82,7 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                     row.alignment = "CENTER"
                     row.scale_y = 2
                     row.operator(
-                        "bdental.volume_render",icon="OUTLINER_OB_POINTCLOUD"
+                        "bdental.volume_render",icon=violet_icon
                     )
                     row = layout.row()
                     row.label(text=f"TRESHOLD {Wmin}/{Wmax} :")
@@ -100,111 +101,111 @@ class BDENTAL_PT_SCAN_VIEWER(bpy.types.Panel):
                     
 
 
-class BDENTAL_PT_AlignPanel(bpy.types.Panel):
-    """ BLENDER DENTAL SCAN VIEWER"""
+# class BDENTAL_PT_AlignPanel(bpy.types.Panel):
+#     """ BLENDER DENTAL SCAN VIEWER"""
 
-    bl_idname = "BDENTAL_PT_AlignPanel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"  # blender 2.7 and lower = TOOLS
-    bl_category = "BDENT"
-    bl_label = "BDENTAL ALIGN TOOLS :"
-    bl_options = {"DEFAULT_CLOSED"}
+#     bl_idname = "BDENTAL_PT_AlignPanel"
+#     bl_space_type = "VIEW_3D"
+#     bl_region_type = "UI"  # blender 2.7 and lower = TOOLS
+#     bl_category = "BDENT"
+#     bl_label = "BDENTAL ALIGN TOOLS :"
+#     bl_options = {"DEFAULT_CLOSED"}
 
-    def draw(self, context):
-        BDENTAL_Props = context.scene.BDENTAL_Props
-        AlignModalState = BDENTAL_Props.AlignModalState
-        layout = self.layout
-        row = layout.row()
-        row.operator("bdental.alignpoints")
-        row.operator("bdental.alignpointsinfo", text="", icon="INFO")
+#     def draw(self, context):
+#         BDENTAL_Props = context.scene.BDENTAL_Props
+#         AlignModalState = BDENTAL_Props.AlignModalState
+#         layout = self.layout
+#         row = layout.row()
+#         row.operator("bdental.alignpoints")
+#         row.operator("bdental.alignpointsinfo", text="", icon="INFO")
 
-        # conditions :
-        ###################################
-        if not bpy.context.selected_objects:
-            self.AlignLabels = "NOTREADY"
-            BaseObjectLabel = " Empty !"
-            BaseObjectIcon = red_icon
-            AlignObjectLabel = " Empty !"
-            AlignObjectIcon = red_icon
+#         # conditions :
+#         ###################################
+#         if not bpy.context.selected_objects:
+#             self.AlignLabels = "NOTREADY"
+#             BaseObjectLabel = " Empty !"
+#             BaseObjectIcon = red_icon
+#             AlignObjectLabel = " Empty !"
+#             AlignObjectIcon = red_icon
 
-        if len(bpy.context.selected_objects) == 1:
-            self.AlignLabels = "NOTREADY"
-            BaseObject = bpy.context.selected_objects[0]
-            BaseObjectLabel = f" {BaseObject.name}"
-            BaseObjectIcon = green_icon
-            AlignObjectLabel = " Empty ! "
-            AlignObjectIcon = red_icon
+#         if len(bpy.context.selected_objects) == 1:
+#             self.AlignLabels = "NOTREADY"
+#             BaseObject = bpy.context.selected_objects[0]
+#             BaseObjectLabel = f" {BaseObject.name}"
+#             BaseObjectIcon = green_icon
+#             AlignObjectLabel = " Empty ! "
+#             AlignObjectIcon = red_icon
 
-        if len(bpy.context.selected_objects) == 2:
-            self.AlignLabels = "GOOD"
-            BaseObject = bpy.context.active_object
-            AlignObject = [
-                obj
-                for obj in bpy.context.selected_objects
-                if not obj is bpy.context.active_object
-            ][0]
-            BaseObjectLabel = f" {BaseObject.name}"
-            BaseObjectIcon = green_icon
-            AlignObjectLabel = f" {AlignObject.name}"
-            AlignObjectIcon = orange_icon
+#         if len(bpy.context.selected_objects) == 2:
+#             self.AlignLabels = "GOOD"
+#             BaseObject = bpy.context.active_object
+#             AlignObject = [
+#                 obj
+#                 for obj in bpy.context.selected_objects
+#                 if not obj is bpy.context.active_object
+#             ][0]
+#             BaseObjectLabel = f" {BaseObject.name}"
+#             BaseObjectIcon = green_icon
+#             AlignObjectLabel = f" {AlignObject.name}"
+#             AlignObjectIcon = orange_icon
 
-        Condition_1 = len(bpy.context.selected_objects) != 2
-        Condition_2 = bpy.context.selected_objects and not bpy.context.active_object
-        Condition_3 = bpy.context.selected_objects and not (
-            bpy.context.active_object in bpy.context.selected_objects
-        )
-        Condition_4 = not bpy.context.active_object in bpy.context.visible_objects
+#         Condition_1 = len(bpy.context.selected_objects) != 2
+#         Condition_2 = bpy.context.selected_objects and not bpy.context.active_object
+#         Condition_3 = bpy.context.selected_objects and not (
+#             bpy.context.active_object in bpy.context.selected_objects
+#         )
+#         Condition_4 = not bpy.context.active_object in bpy.context.visible_objects
 
-        if Condition_1 or Condition_2 or Condition_3 or Condition_4:
-            self.AlignLabels = "INVALID"
-        if AlignModalState:
-            self.AlignLabels = "MODAL"
+#         if Condition_1 or Condition_2 or Condition_3 or Condition_4:
+#             self.AlignLabels = "INVALID"
+#         if AlignModalState:
+#             self.AlignLabels = "MODAL"
 
-        #########################################
+#         #########################################
 
-        if self.AlignLabels == "GOOD":
+#         if self.AlignLabels == "GOOD":
 
-            box = layout.box()
+#             box = layout.box()
 
-            row = box.row()
-            row.label(text=f"BASE object  :{BaseObjectLabel}")  # , icon=BaseObjectIcon
-            row = box.row()
-            row.label(
-                text=f"ALIGN object :{AlignObjectLabel}"
-            )  # , icon=AlignObjectIcon
-            row = box.row()
-            row.alert = True
-            row.label(text="READY FOR ALIGNEMENT.")
+#             row = box.row()
+#             row.label(text=f"BASE object  :{BaseObjectLabel}")  # , icon=BaseObjectIcon
+#             row = box.row()
+#             row.label(
+#                 text=f"ALIGN object :{AlignObjectLabel}"
+#             )  # , icon=AlignObjectIcon
+#             row = box.row()
+#             row.alert = True
+#             row.label(text="READY FOR ALIGNEMENT.")
 
-        if self.AlignLabels == "NOTREADY":
+#         if self.AlignLabels == "NOTREADY":
 
-            box = layout.box()
+#             box = layout.box()
 
-            # row = box.row()
-            # row.label(text=f"BASE object  :{BaseObjectLabel}", icon=BaseObjectIcon)
-            # row = box.row()
-            # row.label(text=f"ALIGN object :{AlignObjectLabel}", icon=AlignObjectIcon)
-            row = box.row()
-            row.alert = True
-            row.label(text="NOT READY!")
+#             # row = box.row()
+#             # row.label(text=f"BASE object  :{BaseObjectLabel}", icon=BaseObjectIcon)
+#             # row = box.row()
+#             # row.label(text=f"ALIGN object :{AlignObjectLabel}", icon=AlignObjectIcon)
+#             row = box.row()
+#             row.alert = True
+#             row.label(text="NOT READY!")
 
-        if self.AlignLabels == "INVALID":
-            box = layout.box()
-            row = box.row()
-            row.alert = True
-            row.label(text="Invalid objects selection, check info !", icon="ERROR")
+#         if self.AlignLabels == "INVALID":
+#             box = layout.box()
+#             row = box.row()
+#             row.alert = True
+#             row.label(text="Invalid objects selection, check info !", icon="ERROR")
 
-        if self.AlignLabels == "MODAL":
-            box = layout.box()
-            row = box.row()
-            row.alert = True
-            row.label(text="WAITING FOR ALIGNEMENT...!")
+#         if self.AlignLabels == "MODAL":
+#             box = layout.box()
+#             row = box.row()
+#             row.alert = True
+#             row.label(text="WAITING FOR ALIGNEMENT...!")
 
-        row = layout.row()
-        row.operator("bdental.alignicp")
-        # if self.AlignLabels == "GOOD":
-        #     row = layout.row()
-        #     row.operator("bdental.alignpoints")
+#         row = layout.row()
+#         row.operator("bdental.alignicp")
+#         # if self.AlignLabels == "GOOD":
+#         #     row = layout.row()
+#         #     row.operator("bdental.alignpoints")
 
 
 #################################################################################################
@@ -213,7 +214,7 @@ class BDENTAL_PT_AlignPanel(bpy.types.Panel):
 
 classes = [
     BDENTAL_PT_SCAN_VIEWER,
-    BDENTAL_PT_AlignPanel,
+    # BDENTAL_PT_AlignPanel,
 ]
 
 

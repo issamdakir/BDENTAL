@@ -633,7 +633,7 @@ class BDENTAL_OT_Volume_Render(bpy.types.Operator):
     """ Volume Render """
 
     bl_idname = "bdental.volume_render"
-    bl_label = "Import SCAN"
+    bl_label = "LOAD SCAN"
 
     q = Queue()
 
