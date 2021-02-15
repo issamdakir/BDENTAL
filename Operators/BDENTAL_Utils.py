@@ -209,7 +209,7 @@ def BDENTAL_TresholdUpdate(scene):
     if CtVolumeList :
         Active_Obj = bpy.context.view_layer.objects.active
         if Active_Obj and Active_Obj in CtVolumeList :
-            print("Treshold Update trigred!")
+            # print("Treshold Update trigred!")
             Vol = Active_Obj
             Preffix = Vol.name[:5]
             GpNode = bpy.data.node_groups.get(f"{Preffix}_{GpShader}")
